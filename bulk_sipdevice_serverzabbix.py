@@ -3,8 +3,8 @@ import os, re, sys, subprocess, requests
 
 # ========= CONFIG =========
 ZBX_URL   = os.environ.get("ZBX_URL",   "http://<IP>/zabbix/api_jsonrpc.php")
-ZBX_USER  = os.environ.get("ZBX_USER",  "Admin")
-ZBX_PASS  = os.environ.get("ZBX_PASS",  "vonaGe3102iP")
+ZBX_USER  = os.environ.get("ZBX_USER",  "admin")
+ZBX_PASS  = os.environ.get("ZBX_PASS",  "admin")
 HOST_NAME = os.environ.get("ZBX_HOST",  "gatewayp")  # nombre EXACTO del host en Zabbix
 
 # Por defecto NO verificar TLS (útil para HTTP o HTTPS self-signed).

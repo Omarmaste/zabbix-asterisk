@@ -11,7 +11,7 @@ SCRIPTS_DIR="${SCRIPTS_DIR:-/etc/zabbix/scripts}"             # carpeta para scr
 
 # Usuario bajo el que se ejecutará asterisk vía sudo dentro de CADA script generado:
 # (pon 'asterisk' si tu servicio corre como ese usuario; déjalo 'root' si corre como root).
-ASTERISK_USER_DEFAULT="${ASTERISK_USER_DEFAULT:-root}"
+ASTERISK_USER_DEFAULT="${ASTERISK_USER_DEFAULT:-asterisk}"
 
 # Prefijo para diferenciar de scripts chan_sip existentes
 SCRIPT_PREFIX="pjsip-"

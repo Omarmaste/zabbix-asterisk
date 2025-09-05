@@ -2,7 +2,7 @@
 import os, re, sys, subprocess, requests
 
 # ========= CONFIG =========
-ZBX_URL   = os.environ.get("ZBX_URL",   "http://172.27.127.89/zabbix/api_jsonrpc.php")
+ZBX_URL   = os.environ.get("ZBX_URL",   "http://<IP>/zabbix/api_jsonrpc.php")
 ZBX_USER  = os.environ.get("ZBX_USER",  "Admin")
 ZBX_PASS  = os.environ.get("ZBX_PASS",  "vonaGe3102iP")
 HOST_NAME = os.environ.get("ZBX_HOST",  "gatewayp")  # nombre EXACTO del host en Zabbix

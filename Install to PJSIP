@@ -1,0 +1,9 @@
+En Debian / RockyLinux
+cat >/etc/sudoers.d/zabbix-asterisk <<'EOF'
+Defaults:zabbix !requiretty
+zabbix ALL=(asterisk) NOPASSWD: /usr/sbin/asterisk
+EOF
+chmod 440 /etc/sudoers.d/zabbix-asterisk
+visudo -cf /etc/sudoers
+
+

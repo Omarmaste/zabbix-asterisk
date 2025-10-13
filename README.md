@@ -3,13 +3,16 @@
 ## 🙋 Author
 
 Made with ☕, 🐧 and Python by **Omar Maste**
-- GitHub: [@Omarmaste](https://github.com/Omarmaste)
-- LinkedIn: [tu-linkedin-aquí](https://www.linkedin.com/in/omar-jose-galaviz-prado-2a865413)
-- Email: [omarg55@gmail.com](mailto:omarg55@gmail.com)
-- Telegram: [@Ogalaviz](https://t.me/Ogalaviz)
-> 💬 Feel free to connect or contribute. Open to collaboration and DevOps fun!
+
+- 🟢 GitHub: [@Omarmaste](https://github.com/Omarmaste)
+- 🔵 LinkedIn: [Omar José Galaviz Prado](https://www.linkedin.com/in/omar-jose-galaviz-prado-2a865413)
+- ✉️ Email: [omarg55@gmail.com](mailto:omarg55@gmail.com)
+- 📲 Telegram: [@ogalaviz](https://t.me/ogalaviz)
+
+💬 *Feel free to connect or contribute. Open to collaboration and DevOps fun!*
 
 ---
+
 
 # 📡 Zabbix-Asterisk Integration
 

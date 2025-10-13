@@ -1,14 +1,3 @@
-## 🙋 Author
-
-Made with ☕, 🐧 and Python by **Omar Maste**
-
-- 🟢 GitHub: [@Omarmaste](https://github.com/Omarmaste)
-- 🔵 LinkedIn: [Omar José Galaviz Prado](https://www.linkedin.com/in/omar-jose-galaviz-prado-2a865413)
-- ✉️ Email: [omarg55@gmail.com](mailto:omarg55@gmail.com)
-- 📲 Telegram: [@ogalaviz](https://t.me/ogalaviz)
-
-💬 *Feel free to connect or contribute. Open to collaboration and DevOps fun!*
-
 # 📡 Zabbix-Asterisk Integration
 
 Monitor your **Asterisk-based VoIP infrastructure** with Zabbix using pre-built scripts for call count tracking and SIP device status.

@@ -1,4 +1,5 @@
 ---
+
 ## 🙋 Author
 Made with ☕, 🐧 and Python by **Omar Maste**
 - GitHub: [@Omarmaste](https://github.com/Omarmaste)
@@ -6,6 +7,7 @@ Made with ☕, 🐧 and Python by **Omar Maste**
 - Email: [omarg55@gmail.com](mailto:omarg55@gmail.com)
 - Telegram: [@Ogalaviz](https://t.me/Ogalaviz)
 > 💬 Feel free to connect or contribute. Open to collaboration and DevOps fun!
+> 
 ---
 
 # 📡 Zabbix-Asterisk Integration

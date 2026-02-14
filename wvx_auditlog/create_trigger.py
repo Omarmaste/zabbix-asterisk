@@ -14,7 +14,7 @@ if len(sys.argv) < 2:
 WVX_OPERACION = sys.argv[1]
 HOST_NAME = "monitoralo"
 
-ZBX_URL = "http://ip/zabbix/api_jsonrpc.php"
+ZBX_URL = "http://IP/zabbix/api_jsonrpc.php"
 ZBX_USER = "user"
 ZBX_PASS = "pass"
 
@@ -75,25 +75,14 @@ def create_trigger(auth, hostid, host, config):
     trigger_name = f"[{WVX_OPERACION.upper()}] {config['name']}"
     
     # EXPRESIÓN QUE FUNCIONA: detecta cuando el contador cambia
-    expression = f"""
-    last(/{host}/{key_base}.data)<>""
-    and
-    (
-    last(/{host}/{key_base}.count)
-    -
-    last(/{host}/{key_base}.count,#2)
-    > 0
-    )
-    """.strip()
-        
+    # Esta es la expresión que probaste manualmente y funciona
+    expression = f"last(/{host}/{key_base}.count)-last(/{host}/{key_base}.count,#2)>0"
+    
     # RECUPERACIÓN: cuando no hay cambio
-    recovery_expression = (
-        f'last(/{host}/{key_base}.count)='
-        f'last(/{host}/{key_base}.count,#2)'
-    )
-        
+    recovery_expression = f"last(/{host}/{key_base}.count)-last(/{host}/{key_base}.count,#2)=0"
+    
     # OPERATIONAL DATA: Muestra el JSON del evento
-    opdata = f"{{ITEM.VALUE1}}"
+    opdata = f"{{ITEM.LASTVALUE:{key_base}.data}}"
     
     trigger_params = {
         "description": trigger_name,
@@ -103,7 +92,7 @@ def create_trigger(auth, hostid, host, config):
         "priority": config["severity"],
         "comments": f"{config.get('description', config['name'])} - Audit Log Event",
         "manual_close": 1,
-        "type": 1,  # Single
+        "type": 0,  # Single
         "correlation_mode": 0,
         "opdata": opdata,
         "tags": [

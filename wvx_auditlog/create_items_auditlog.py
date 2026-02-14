@@ -30,7 +30,7 @@ WVX_OPERACION = sys.argv[1]
 HOST_NAME = sys.argv[2] if len(sys.argv) > 2 else "monitoralo"
 
 # ========= ZABBIX =========
-ZBX_URL   = "http://ip/zabbix/api_jsonrpc.php"
+ZBX_URL   = "http://IP/zabbix/api_jsonrpc.php"
 ZBX_USER  = "user"
 ZBX_PASS  = "pass"
 

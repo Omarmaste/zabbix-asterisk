@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # Monitor de Audit Log con soporte para múltiples operaciones Wolkvox
+# Incluye soporte de zonas horarias
 # Uso: bash monitor_audit_log.sh <wvx_operacion> [--debug]
-
-
 
 set -uo pipefail
 
@@ -15,6 +14,7 @@ if [ $# -lt 1 ]; then
     echo "Ejemplos:"
     echo "  bash monitor_audit_log.sh stargroup"
     echo "  bash monitor_audit_log.sh alo-proyectos --debug"
+    echo "  bash monitor_audit_log.sh mexico-operation"
     exit 1
 fi
 
@@ -23,19 +23,21 @@ DEBUG=0
 [[ "${2:-}" == "--debug" ]] && DEBUG=1
 
 # ========= CONFIGURACIÓN BASE =========
-ZBX_SERVER="172.27.127.89"
+ZBX_SERVER="IP"
 ZBX_PORT="10051"
 ZBX_HOST="monitoralo"
 
 # ========= CONFIGURACIÓN POR OPERACIÓN =========
 case "$WVX_OPERACION" in
-    stargroup)
-        WOLKVOX_SERVER="00XX"
-        WOLKVOX_TOKEN="TOKEN1"
+    aloglobal-stargroup-cis)
+        WOLKVOX_SERVER="0041"
+        WOLKVOX_TOKEN="token"
+        TIMEZONE="America/Mexico_City"  # Colombia (UTC-5)
         ;;
     alo-proyectos)
-        WOLKVOX_SERVER="00XX"
-        WOLKVOX_TOKEN="TOKEN2"
+        WOLKVOX_SERVER="0051"
+        WOLKVOX_TOKEN="token"
+        TIMEZONE="America/Bogota"  # Colombia (UTC-5)
         ;;
     *)
         echo "Error: Operación '$WVX_OPERACION' no configurada"
@@ -71,18 +73,19 @@ IGNORE_PATTERNS=(
 # ========= FUNCIONES =========
 
 log_msg() {
-    local msg="[$(date '+%Y-%m-%d %H:%M:%S')] $1"
+    local msg="[$(TZ="$TIMEZONE" date '+%Y-%m-%d %H:%M:%S %Z')] $1"
     echo "$msg"
     [[ $DEBUG -eq 1 ]] && echo "$msg" >> "$DEBUG_LOG"
 }
 
 debug_msg() {
-    [[ $DEBUG -eq 1 ]] && echo "[DEBUG $(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$DEBUG_LOG"
+    [[ $DEBUG -eq 1 ]] && echo "[DEBUG $(TZ="$TIMEZONE" date '+%Y-%m-%d %H:%M:%S %Z')] $1" >> "$DEBUG_LOG"
 }
 
 get_time_range() {
-    local date_end=$(date '+%Y%m%d%H%M%S')
-    local date_ini=$(date -d '5 minutes ago' '+%Y%m%d%H%M%S')
+    # Generar timestamps en la zona horaria configurada
+    local date_end=$(TZ="$TIMEZONE" date '+%Y%m%d%H%M%S')
+    local date_ini=$(TZ="$TIMEZONE" date -d '5 minutes ago' '+%Y%m%d%H%M%S')
     echo "${date_ini}|${date_end}"
 }
 
@@ -163,6 +166,7 @@ fetch_audit_log() {
     log_msg "Consultando audit log: ${date_ini} -> ${date_end}"
     debug_msg "Operación: ${WVX_OPERACION}"
     debug_msg "Server: wv${WOLKVOX_SERVER}"
+    debug_msg "Timezone: ${TIMEZONE}"
     
     for attempt in $(seq 1 $MAX_RETRIES); do
         debug_msg "Intento ${attempt}/${MAX_RETRIES}"
@@ -197,7 +201,6 @@ fetch_audit_log() {
 }
 
 load_state() {
-    # IMPORTANTE: Declarar el array GLOBAL primero
     declare -gA PROCESSED_IDS
     
     if [[ -f "$STATE_FILE" ]]; then
@@ -219,7 +222,6 @@ load_state() {
 }
 
 load_counters() {
-    # IMPORTANTE: Declarar el array GLOBAL primero
     declare -gA COUNTERS
     
     if [[ -f "$COUNTER_FILE" ]]; then
@@ -350,12 +352,13 @@ process_audit_events() {
             --arg ip "$ip" \
             --arg ws "$workstation" \
             --arg org "$origen" \
-            '{timestamp:$dt,user:$usr,action:$act,ip:$ip,workstation:$ws,origen:$org}' | tr -d '\n')
+            --arg tz "$TIMEZONE" \
+            '{timestamp:$dt,user:$usr,action:$act,ip:$ip,workstation:$ws,origen:$org,timezone:$tz}' | tr -d '\n')
         
         echo "${ZBX_HOST} ${alert_type}.data ${alert_json}" >> "$TMP_FILE"
         echo "${ZBX_HOST} ${alert_type}.count ${current_count}" >> "$TMP_FILE"
         
-        PROCESSED_IDS["$event_id"]="$(date '+%Y%m%d%H%M%S')"
+        PROCESSED_IDS["$event_id"]="$(TZ="$TIMEZONE" date '+%Y%m%d%H%M%S')"
         
         ((new_alerts++))
         
@@ -399,7 +402,7 @@ send_to_zabbix() {
 
 cleanup_old_state() {
     local cutoff_time
-    cutoff_time=$(date -d '24 hours ago' '+%Y%m%d%H%M%S')
+    cutoff_time=$(TZ="$TIMEZONE" date -d '24 hours ago' '+%Y%m%d%H%M%S')
     
     local cleaned=0
     for key in "${!PROCESSED_IDS[@]}"; do
@@ -416,7 +419,7 @@ cleanup_old_state() {
 # ========= MAIN =========
 
 main() {
-    [[ $DEBUG -eq 1 ]] && echo "=== DEBUG START $(date) ===" >> "$DEBUG_LOG"
+    [[ $DEBUG -eq 1 ]] && echo "=== DEBUG START $(TZ="$TIMEZONE" date) ===" >> "$DEBUG_LOG"
     
     log_msg "=========================================="
     log_msg "AUDIT LOG MONITOR - ${WVX_OPERACION^^}"
@@ -428,6 +431,7 @@ main() {
     log_msg "  Operación: ${WVX_OPERACION}"
     log_msg "  Server: wv${WOLKVOX_SERVER}"
     log_msg "  Host Zabbix: ${ZBX_HOST}"
+    log_msg "  Timezone: ${TIMEZONE}"
     echo ""
     
     if ! fetch_audit_log; then
@@ -457,7 +461,7 @@ main() {
     log_msg "Fin de ejecución"
     log_msg "=========================================="
     
-    [[ $DEBUG -eq 1 ]] && echo "=== DEBUG END $(date) ===" >> "$DEBUG_LOG"
+    [[ $DEBUG -eq 1 ]] && echo "=== DEBUG END $(TZ="$TIMEZONE" date) ===" >> "$DEBUG_LOG"
 }
 
 main "$@"

@@ -1,0 +1,19 @@
+#!/bin/bash
+
+ZABBIX_SERVER="IP_ZABBIX_SERVER"
+HOSTNAME="elroble.com"
+ITEM_KEY="asterisk.status"
+
+# Ejecutar comando
+OUTPUT=$(asterisk -rx "core show uptime" 2>&1)
+RC=$?
+
+# Validación más robusta
+if [[ $RC -eq 0 && "$OUTPUT" == *"System uptime"* ]]; then
+    STATUS=1
+else
+    STATUS=0
+fi
+
+# Enviar a Zabbix
+/usr/bin/zabbix_sender -z $ZABBIX_SERVER -s "$HOSTNAME" -k $ITEM_KEY -o $STATUS >/dev/null 2>&1

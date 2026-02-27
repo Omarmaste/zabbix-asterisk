@@ -1,0 +1,29 @@
+#!/bin/bash
+ZABBIX_SERVER="127.0.0.1"
+HOSTNAME="Zabbix server"
+
+# Verificar si fail2ban está corriendo
+STATUS=$(systemctl is-active fail2ban)
+if [[ "$STATUS" == "active" ]]; then
+    /usr/bin/zabbix_sender -z $ZABBIX_SERVER -s "$HOSTNAME" -k "fail2ban.status" -o 1 >/dev/null 2>&1
+else
+    /usr/bin/zabbix_sender -z $ZABBIX_SERVER -s "$HOSTNAME" -k "fail2ban.status" -o 0 >/dev/null 2>&1
+fi
+
+# Total de IPs baneadas en todas las jails
+TOTAL_BANNED=$(fail2ban-client status 2>/dev/null | grep -oP '(?<=Jail list:\s).*' | tr ',' '\n' | while read jail; do
+    jail=$(echo $jail | tr -d ' ')
+    fail2ban-client status "$jail" 2>/dev/null | grep "Currently banned" | awk '{print $NF}'
+done | awk '{s+=$1} END {print s+0}')
+/usr/bin/zabbix_sender -z $ZABBIX_SERVER -s "$HOSTNAME" -k "fail2ban.banned.total" -o $TOTAL_BANNED >/dev/null 2>&1
+
+# Baneadas en jail asterisk-iptables (la más importante en Issabel)
+BANNED_ASTERISK=$(fail2ban-client status asterisk-iptables 2>/dev/null | grep "Currently banned" | awk '{print $NF}')
+BANNED_ASTERISK=${BANNED_ASTERISK:-0}
+/usr/bin/zabbix_sender -z $ZABBIX_SERVER -s "$HOSTNAME" -k "fail2ban.banned.asterisk" -o $BANNED_ASTERISK >/dev/null 2>&1
+
+# Baneadas en jail sshd
+BANNED_SSH=$(fail2ban-client status sshd 2>/dev/null | grep "Currently banned" | awk '{print $NF}')
+BANNED_SSH=${BANNED_SSH:-0}
+/usr/bin/zabbix_sender -z $ZABBIX_SERVER -s "$HOSTNAME" -k "fail2ban.banned.ssh" -o $BANNED_SSH >/dev/null 2>&1
+

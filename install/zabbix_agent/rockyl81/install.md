@@ -3,7 +3,14 @@ sudo rpm -Uvh https://repo.zabbix.com/zabbix/6.0/rhel/8/x86_64/zabbix-release-la
 ** Instala el agente
 dnf install -y zabbix-agent
 yum install -y zabbix-sender
- 
+
+#Permitir en el servidor monitor
+#PORT 80, 10051
+
+#Permitir en el servidor cliente
+#PORT 10050,8088,5036,80
+
+
 vi /etc/zabbix/zabbix_agentd.conf
 Server=192.168.1.10              # IP del Zabbix Server (chequeos pasivos)
 ServerActive=192.168.1.10        # IP del Zabbix Server (chequeos activos)

@@ -11,6 +11,7 @@ ZBX_PORT="${ZBX_PORT:-10051}"
 ZBX_HOST="${LATENCY_ZBX_HOST:-${ZBX_HOST:-ippbx-cloud-issa5-redplus}}"
 WOLKVOX_SERVER="${WOLKVOX_SERVER:-00XX}"
 WOLKVOX_TOKEN="${WOLKVOX_TOKEN:-TOKEN}"
+WOLKVOX_OPERATION="${WOLKVOX_OPERATION:-unknown_operation}"
 _WVX_BASE="${WOLKVOX_URL:-https://wv${WOLKVOX_SERVER}.wolkvox.com/api/v2/real_time.php}"
 API_URL="${_WVX_BASE}?api=latency"
 
@@ -70,7 +71,7 @@ while IFS='|' read -r agent_id latency_ms; do
   ((agent_count++))
   last="${LAST_VALUES[$code]:-}"
   if [[ "$latency_ms" != "$last" ]] || [[ -z "$last" ]]; then
-    echo "${ZBX_HOST} agent.latency[${code}] ${latency_ms}" >> "$TMP_FILE"
+    echo "${ZBX_HOST} ${WOLKVOX_OPERATION}.agent.latency[${code}] ${latency_ms}" >> "$TMP_FILE"
     echo "  ✓ Agent ${code}: ${last:-N/A} -> ${latency_ms} ms"
     LAST_VALUES["$code"]="$latency_ms"
     ((total_changes++))

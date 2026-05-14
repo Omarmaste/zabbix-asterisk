@@ -20,9 +20,10 @@ ZBX_USER  = os.environ.get("ZBX_USER",       "Admin")
 ZBX_PASS  = os.environ.get("ZBX_PASS",       "CHANGE_ME")
 HOST_NAME = os.environ.get("LATENCY_ZBX_HOST", os.environ.get("ZBX_HOST", "ippbx-cloud-issa5-redplus"))
 
-WOLKVOX_URL    = os.environ.get("WOLKVOX_URL",    "https://wv0025.wolkvox.com/api/v2/real_time.php")
-WOLKVOX_SERVER = os.environ.get("WOLKVOX_SERVER", "00XX")
-WOLKVOX_TOKEN  = os.environ.get("WOLKVOX_TOKEN",  "CHANGE_ME")
+WOLKVOX_URL       = os.environ.get("WOLKVOX_URL",       "https://wv0036.wolkvox.com/api/v2/real_time.php")
+WOLKVOX_SERVER    = os.environ.get("WOLKVOX_SERVER",    "00XX")
+WOLKVOX_TOKEN     = os.environ.get("WOLKVOX_TOKEN",     "CHANGE_ME")
+WOLKVOX_OPERATION = os.environ.get("WOLKVOX_OPERATION", "unknown_operation")
 
 DELAY_BETWEEN_REQUESTS = 0.3
 MAX_RETRIES = 2
@@ -84,8 +85,8 @@ def main():
     created = updated = 0
     new_agents = []
     for idx, (code, name) in enumerate(sorted(agents.items()), 1):
-        key_ = f"redplus.agent.nr[{code}]"
-        item_name = f"redplus.Agent-{code}-{name}-NR"
+        key_ = f"{WOLKVOX_OPERATION}.agent.nr[{code}]"
+        item_name = f"[{WOLKVOX_OPERATION.upper()}] Agent {code} - {name} - NR"
         it = item_by_key(auth, hostid, key_)
         try:
             if it:
@@ -100,7 +101,7 @@ def main():
                     "hostid": hostid, "name": item_name, "key_": key_,
                     "type": 2, "value_type": 3, "units": "%",
                     "history": "90d", "trends": "365d",
-                    "description": f"Network rejection del agente {code}"
+                    "description": f"[{WOLKVOX_OPERATION}] Network rejection del agente {code}"
                 }, auth)
                 created += 1
                 new_agents.append(f"{code}-{name}")

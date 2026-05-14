@@ -10,6 +10,15 @@ yum install -y zabbix-sender
 #Permitir en el servidor cliente
 #PORT 10050,8088,5036,80
 
+#Permitir a zabbix ejecutar Asterisk sin password
+visudo -f /etc/sudoers.d/zabbix-asterisk
+zabbix ALL=(root) NOPASSWD: /usr/sbin/asterisk
+#Permisos correctos del archivo sudoers:
+chmod 440 /etc/sudoers.d/zabbix-asterisk
+#Validar sintaxis:
+sudo visudo -c
+systemctl restart zabbix-agent
+
 
 vi /etc/zabbix/zabbix_agentd.conf
 Server=192.168.1.10              # IP del Zabbix Server (chequeos pasivos)

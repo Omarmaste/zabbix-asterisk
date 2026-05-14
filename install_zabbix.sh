@@ -2,22 +2,24 @@
 # =============================================================
 # install_zabbix.sh — Instala ítems y triggers en Zabbix
 # Módulos: fail2ban, sip, pjsip, countcalls, latencyagent, auditlog
-# Excluye: councall_freeswitch
 #
 # Uso:
-#   bash install_zabbix.sh                            # instala todo
-#   bash install_zabbix.sh --skip-agent               # no toca zabbix_agentd.conf
-#   bash install_zabbix.sh --signal_voip=SIP          # usa SIP   → excluye PJSIP
-#   bash install_zabbix.sh --signal_voip=PJSIP        # usa PJSIP → excluye SIP
-#   bash install_zabbix.sh --signal_voip=SIP,PJSIP    # usa ambos → no excluye nada
+#   bash install_zabbix.sh                              # instala todo
+#   bash install_zabbix.sh --skip-agent                 # no toca zabbix_agentd.conf
+#   bash install_zabbix.sh --skip-voip                  # omite fail2ban+SIP+PJSIP+countcalls
+#   bash install_zabbix.sh --signal_voip=SIP            # usa SIP   → excluye PJSIP
+#   bash install_zabbix.sh --signal_voip=PJSIP          # usa PJSIP → excluye SIP
+#   bash install_zabbix.sh --signal_voip=SIP,PJSIP      # usa ambos → no excluye nada
 #
-# Nota: --signal_voip indica la señalización EN USO; la que no se menciona se omite.
-# Se pueden combinar: --skip-agent --signal_voip=SIP
+# Combinaciones frecuentes:
+#   --skip-agent --skip-voip          → solo latency + auditlog
+#   --skip-agent --signal_voip=SIP    → SIP+countcalls+latency+auditlog sin tocar agente
 # =============================================================
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SKIP_AGENT=0
+SKIP_VOIP=0
 EXCLUDE_SIP=0
 EXCLUDE_PJSIP=0
 
@@ -27,30 +29,26 @@ for arg in "$@"; do
         --skip-agent)
             SKIP_AGENT=1
             ;;
+        --skip-voip)
+            SKIP_VOIP=1
+            ;;
         --signal_voip=*)
             val="${arg#--signal_voip=}"
             # El valor indica qué señalización SE USA → la otra se excluye.
-            # Ej: --signal_voip=SIP   → usa SIP,   excluye PJSIP
-            #     --signal_voip=PJSIP → usa PJSIP, excluye SIP
-            #     --signal_voip=SIP,PJSIP → usa ambas, no excluye nada
-            val_upper="${val^^}"
-            [[ "$val_upper" != *"SIP"*   || "$val_upper" == *"PJSIP"* && "$val_upper" != *",SIP"* && "$val_upper" != *"SIP,"* ]] || true
-            # Determinar cuáles están presentes en el valor
             has_sip=0; has_pjsip=0
             IFS=',' read -ra voip_list <<< "$val"
             for v in "${voip_list[@]}"; do
                 v_upper="${v^^}"
-                v_upper="${v_upper// /}"   # quitar espacios
+                v_upper="${v_upper// /}"
                 [[ "$v_upper" == "SIP"   ]] && has_sip=1
                 [[ "$v_upper" == "PJSIP" ]] && has_pjsip=1
             done
-            # Lo que NO se indicó → se excluye
             [[ $has_sip   -eq 0 ]] && EXCLUDE_SIP=1
             [[ $has_pjsip -eq 0 ]] && EXCLUDE_PJSIP=1
             ;;
         *)
             echo "Argumento desconocido: $arg"
-            echo "Uso: bash install_zabbix.sh [--skip-agent] [--signal_voip=SIP|PJSIP|SIP,PJSIP]"
+            echo "Uso: bash install_zabbix.sh [--skip-agent] [--skip-voip] [--signal_voip=SIP|PJSIP|SIP,PJSIP]"
             exit 1
             ;;
     esac
@@ -122,28 +120,44 @@ echo "  Servidor Zabbix : ${ZBX_URL:-<no configurado>}"
 echo "  Usuario         : ${ZBX_USER:-<no configurado>}"
 echo "  Fecha           : $(date '+%Y-%m-%d %H:%M:%S')"
 
-# Mostrar qué módulos VoIP se excluyen
-excluded_voip=()
-[[ $EXCLUDE_SIP   -eq 1 ]] && excluded_voip+=("SIP")
-[[ $EXCLUDE_PJSIP -eq 1 ]] && excluded_voip+=("PJSIP")
-if [[ ${#excluded_voip[@]} -gt 0 ]]; then
-    echo -e "  ${Y}Excluidos       : ${excluded_voip[*]} (no son la señalización activa)${N}"
+# Mostrar qué módulos se omiten
+if [[ $SKIP_VOIP -eq 1 ]]; then
+    echo -e "  ${Y}--skip-voip     : omite fail2ban, SIP, PJSIP, countcalls${N}"
+else
+    excluded_voip=()
+    [[ $EXCLUDE_SIP   -eq 1 ]] && excluded_voip+=("SIP")
+    [[ $EXCLUDE_PJSIP -eq 1 ]] && excluded_voip+=("PJSIP")
+    if [[ ${#excluded_voip[@]} -gt 0 ]]; then
+        echo -e "  ${Y}Excluidos       : ${excluded_voip[*]} (no son la señalización activa)${N}"
+    fi
 fi
 echo ""
 check_creds
 
 # ═══════════════════════════════════════════════════════════════
-# MÓDULO 1 — FAIL2BAN
+# MÓDULOS 1–5 — ASTERISK/VOIP (omitidos con --skip-voip)
 # ═══════════════════════════════════════════════════════════════
+if [[ $SKIP_VOIP -eq 1 ]]; then
+    module_header "FAIL2BAN"
+    skip_step "fail2ban (--skip-voip)"
+    module_header "SIP — chan_sip"
+    skip_step "SIP (--skip-voip)"
+    module_header "PJSIP"
+    skip_step "PJSIP (--skip-voip)"
+    module_header "COUNTCALLS — SIP"
+    skip_step "countcalls SIP (--skip-voip)"
+    module_header "COUNTCALLS — PJSIP"
+    skip_step "countcalls PJSIP (--skip-voip)"
+else
+
+# MÓDULO 1 — FAIL2BAN
 module_header "FAIL2BAN"
 
 run "Items fail2ban" \
     env ZBX_HOST="${ZBX_HOST_FAIL2BAN:-${ZBX_HOST:-Zabbix server}}" \
     python3 "${SCRIPT_DIR}/fail2ban/asterisk.fail2ban.bulk.py"
 
-# ═══════════════════════════════════════════════════════════════
 # MÓDULO 2 — SIP (chan_sip)
-# ═══════════════════════════════════════════════════════════════
 module_header "SIP — chan_sip  [host: ${ZBX_HOST_SIP:-${ZBX_HOST:-gatewayp}}]"
 
 if [[ $EXCLUDE_SIP -eq 1 ]]; then
@@ -153,23 +167,21 @@ if [[ $EXCLUDE_SIP -eq 1 ]]; then
 else
     if [[ $SKIP_AGENT -eq 0 ]]; then
         run "Scripts agente + UserParameters SIP" \
-            bash "${SCRIPT_DIR}/bulk_sipdevice_scripts.sh"
+            bash "${SCRIPT_DIR}/sip/bulk_sipdevice_scripts.sh"
     else
         skip_step "Scripts agente SIP (--skip-agent)"
     fi
 
     run "Items SIP en Zabbix" \
         env ZBX_HOST="${ZBX_HOST_SIP:-${ZBX_HOST:-gatewayp}}" \
-        python3 "${SCRIPT_DIR}/bulk_sipdevice_serverzabbix.py"
+        python3 "${SCRIPT_DIR}/sip/bulk_sipdevice_serverzabbix.py"
 
     run "Triggers SIP en Zabbix" \
         env ZBX_HOST="${ZBX_HOST_SIP:-${ZBX_HOST:-gatewayp}}" \
-        python3 "${SCRIPT_DIR}/bulk_sipdevice_trigger_serverzabbix.py"
+        python3 "${SCRIPT_DIR}/sip/bulk_sipdevice_trigger_serverzabbix.py"
 fi
 
-# ═══════════════════════════════════════════════════════════════
 # MÓDULO 3 — PJSIP
-# ═══════════════════════════════════════════════════════════════
 module_header "PJSIP  [host: ${ZBX_HOST_PJSIP:-${ZBX_HOST:-gatewayd}}]"
 
 if [[ $EXCLUDE_PJSIP -eq 1 ]]; then
@@ -179,23 +191,21 @@ if [[ $EXCLUDE_PJSIP -eq 1 ]]; then
 else
     if [[ $SKIP_AGENT -eq 0 ]]; then
         run "Scripts agente + UserParameters PJSIP" \
-            bash "${SCRIPT_DIR}/bulk_pjsipdevice_scripts.sh"
+            bash "${SCRIPT_DIR}/pjsip/bulk_pjsipdevice_scripts.sh"
     else
         skip_step "Scripts agente PJSIP (--skip-agent)"
     fi
 
     run "Items PJSIP en Zabbix" \
         env ZBX_HOST="${ZBX_HOST_PJSIP:-${ZBX_HOST:-gatewayd}}" \
-        python3 "${SCRIPT_DIR}/bulk_pjsipdevice_serverzabbix.py"
+        python3 "${SCRIPT_DIR}/pjsip/bulk_pjsipdevice_serverzabbix.py"
 
     run "Triggers PJSIP en Zabbix" \
         env ZBX_HOST="${ZBX_HOST_PJSIP:-${ZBX_HOST:-gatewayd}}" \
-        python3 "${SCRIPT_DIR}/bulk_pjsipdevice_trigger_serverzabbix.py"
+        python3 "${SCRIPT_DIR}/pjsip/bulk_pjsipdevice_trigger_serverzabbix.py"
 fi
 
-# ═══════════════════════════════════════════════════════════════
 # MÓDULO 4 — COUNTCALLS SIP
-# ═══════════════════════════════════════════════════════════════
 module_header "COUNTCALLS — SIP  [host: ${ZBX_HOST_COUNTCALLS:-${ZBX_HOST:-startgroup}}]"
 
 if [[ $EXCLUDE_SIP -eq 1 ]]; then
@@ -214,9 +224,7 @@ else
         python3 "${SCRIPT_DIR}/sensor_countcalls/bulk_sipcountcalls_serverzabbix.py"
 fi
 
-# ═══════════════════════════════════════════════════════════════
 # MÓDULO 5 — COUNTCALLS PJSIP
-# ═══════════════════════════════════════════════════════════════
 module_header "COUNTCALLS — PJSIP  [host: ${ZBX_HOST_COUNTCALLS_PJSIP:-${ZBX_HOST:-nueveonce}}]"
 
 if [[ $EXCLUDE_PJSIP -eq 1 ]]; then
@@ -234,6 +242,8 @@ else
         env ZBX_HOST="${ZBX_HOST_COUNTCALLS_PJSIP:-${ZBX_HOST:-nueveonce}}" \
         python3 "${SCRIPT_DIR}/sensor_countcalls/pjsip/bulk_pjsipcountcalls_serverzabbix.py"
 fi
+
+fi  # end SKIP_VOIP
 
 # ═══════════════════════════════════════════════════════════════
 # MÓDULO 6 — LATENCY AGENT

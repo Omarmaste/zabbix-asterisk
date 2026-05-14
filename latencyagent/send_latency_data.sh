@@ -11,7 +11,8 @@ ZBX_PORT="${ZBX_PORT:-10051}"
 ZBX_HOST="${LATENCY_ZBX_HOST:-${ZBX_HOST:-ippbx-cloud-issa5-redplus}}"
 WOLKVOX_SERVER="${WOLKVOX_SERVER:-00XX}"
 WOLKVOX_TOKEN="${WOLKVOX_TOKEN:-TOKEN}"
-API_URL="https://wv${WOLKVOX_SERVER}.wolkvox.com/api/v2/real_time.php?api=latency"
+_WVX_BASE="${WOLKVOX_URL:-https://wv${WOLKVOX_SERVER}.wolkvox.com/api/v2/real_time.php}"
+API_URL="${_WVX_BASE}?api=latency"
 
 BASE_DIR="${LATENCY_BASE_DIR:-/etc/zabbix/scripts/wvx_latency_agent}"
 STATE_FILE="${BASE_DIR}/agent_latency_state.json"
@@ -21,6 +22,8 @@ CURL_OUTPUT="${BASE_DIR}/agent_latency_curl.json"
 MAX_RETRIES=2
 RETRY_DELAY=3
 CURL_TIMEOUT=10
+
+mkdir -p "$BASE_DIR"
 
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Iniciando latency monitor..."
 

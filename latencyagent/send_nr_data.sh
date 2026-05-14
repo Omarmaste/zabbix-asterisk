@@ -10,9 +10,10 @@ unset _ENV_ROOT
 ZBX_SERVER="${ZBX_SERVER:-68.183.116.34}"
 ZBX_PORT="${ZBX_PORT:-10051}"
 ZBX_HOST="${LATENCY_ZBX_HOST:-${ZBX_HOST:-ippbx-cloud-issa5-redplus}}"
-WOLKVOX_SERVER="${WOLKVOX_SERVER:-0041}"
-WOLKVOX_TOKEN="${WOLKVOX_TOKEN:-token}"
-API_URL="https://wv${WOLKVOX_SERVER}.wolkvox.com/api/v2/real_time.php?api=latency"
+WOLKVOX_SERVER="${WOLKVOX_SERVER:-00XX}"
+WOLKVOX_TOKEN="${WOLKVOX_TOKEN:-TOKEN}"
+_WVX_BASE="${WOLKVOX_URL:-https://wv${WOLKVOX_SERVER}.wolkvox.com/api/v2/real_time.php}"
+API_URL="${_WVX_BASE}?api=latency"
 
 BASE_DIR="${LATENCY_BASE_DIR:-/etc/zabbix/scripts/wvx_latency_agent}"
 STATE_FILE="${BASE_DIR}/agent_nr_state.json"
@@ -67,7 +68,7 @@ while IFS='|' read -r agent_id network_rejection; do
   ((agent_count++))
   last="${LAST_VALUES[$code]:-}"
   if [[ "$network_rejection" != "$last" ]] || [[ -z "$last" ]]; then
-    echo "${ZBX_HOST} stargroup.agent.nr[${code}] ${network_rejection}" >> "$TMP_FILE"
+    echo "${ZBX_HOST} redplus.agent.nr[${code}] ${network_rejection}" >> "$TMP_FILE"
     echo "  ✓ Agent ${code}: ${last:-N/A} -> ${network_rejection}"
     LAST_VALUES["$code"]="$network_rejection"
     ((total_changes++))

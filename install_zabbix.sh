@@ -26,7 +26,7 @@ SKIP_AGENT=0
 SKIP_FAIL2BAN=0
 SKIP_SIP=0
 SKIP_PJSIP=0
-SKIP_SENSOR_COUNTCALLS=0
+SKIP_AST_COUNTCALLS_LATENCY=0
 SKIP_WVX_LATENCY_NR=0
 SKIP_WVX_AUDITLOG=0
 
@@ -36,7 +36,7 @@ for arg in "$@"; do
         --skip-fail2ban)           SKIP_FAIL2BAN=1 ;;
         --skip-sip)                SKIP_SIP=1 ;;
         --skip-pjsip)              SKIP_PJSIP=1 ;;
-        --skip-sensor_countcalls)  SKIP_SENSOR_COUNTCALLS=1 ;;
+        --skip-ast_countcalls_latency) SKIP_AST_COUNTCALLS_LATENCY=1 ;;
         --skip-wvx_latency_nr)     SKIP_WVX_LATENCY_NR=1 ;;
         --skip-wvx_auditlog)       SKIP_WVX_AUDITLOG=1 ;;
         *)
@@ -44,7 +44,7 @@ for arg in "$@"; do
             echo ""
             echo "Uso: bash install_zabbix.sh [--skip-agent]"
             echo "       [--skip-fail2ban] [--skip-sip] [--skip-pjsip]"
-            echo "       [--skip-sensor_countcalls] [--skip-wvx_latency_nr] [--skip-wvx_auditlog]"
+            echo "       [--skip-ast_countcalls_latency] [--skip-wvx_latency_nr] [--skip-wvx_auditlog]"
             exit 1
             ;;
     esac
@@ -120,11 +120,11 @@ declare -A _MODS=(
     [fail2ban]=$SKIP_FAIL2BAN
     [sip]=$SKIP_SIP
     [pjsip]=$SKIP_PJSIP
-    [sensor_countcalls]=$SKIP_SENSOR_COUNTCALLS
+    [ast_countcalls_latency]=$SKIP_AST_COUNTCALLS_LATENCY
     [wvx_latency_nr]=$SKIP_WVX_LATENCY_NR
     [wvx_auditlog]=$SKIP_WVX_AUDITLOG
 )
-for mod in fail2ban sip pjsip sensor_countcalls wvx_latency_nr wvx_auditlog; do
+for mod in fail2ban sip pjsip ast_countcalls_latency wvx_latency_nr wvx_auditlog; do
     if [[ ${_MODS[$mod]} -eq 1 ]]; then
         printf "  ${Y}%-24s${N} SKIP\n" "$mod"
     else
@@ -194,26 +194,26 @@ fi
 # ═══════════════════════════════════════════════════════════════
 # MÓDULO 4 — SENSOR COUNTCALLS
 # ═══════════════════════════════════════════════════════════════
-module_header "SENSOR COUNTCALLS  [host: ${ZBX_HOST_COUNTCALLS:-${ZBX_HOST:-startgroup}}]"
+module_header "AST COUNTCALLS LATENCY  [host: ${ZBX_HOST_COUNTCALLS:-${ZBX_HOST:-startgroup}}]"
 
-if [[ $SKIP_SENSOR_COUNTCALLS -eq 1 ]]; then
-    skip_step "sensor_countcalls (--skip-sensor_countcalls)"
+if [[ $SKIP_AST_COUNTCALLS_LATENCY -eq 1 ]]; then
+    skip_step "ast_countcalls_latency (--skip-ast_countcalls_latency)"
 else
     if [[ $SKIP_AGENT -eq 0 ]]; then
         run "Scripts conteo + UserParameters SIP" \
-            bash "${SCRIPT_DIR}/sensor_countcalls/bulk_sipcountcalls_scripts.sh"
+            bash "${SCRIPT_DIR}/ast_countcalls_latency/bulk_sipcountcalls_scripts.sh"
         run "Scripts conteo + UserParameters PJSIP" \
-            bash "${SCRIPT_DIR}/sensor_countcalls/pjsip/bulk_pjsipcountcalls_scripts.sh"
+            bash "${SCRIPT_DIR}/ast_countcalls_latency/pjsip/bulk_pjsipcountcalls_scripts.sh"
     else
         skip_step "Scripts conteo SIP (--skip-agent)"
         skip_step "Scripts conteo PJSIP (--skip-agent)"
     fi
     run "Items countcalls SIP en Zabbix" \
         env ZBX_HOST="${ZBX_HOST_COUNTCALLS:-${ZBX_HOST:-startgroup}}" \
-        python3 "${SCRIPT_DIR}/sensor_countcalls/bulk_sipcountcalls_serverzabbix.py"
+        python3 "${SCRIPT_DIR}/ast_countcalls_latency/bulk_sipcountcalls_serverzabbix.py"
     run "Items countcalls PJSIP en Zabbix" \
         env ZBX_HOST="${ZBX_HOST_COUNTCALLS_PJSIP:-${ZBX_HOST:-nueveonce}}" \
-        python3 "${SCRIPT_DIR}/sensor_countcalls/pjsip/bulk_pjsipcountcalls_serverzabbix.py"
+        python3 "${SCRIPT_DIR}/ast_countcalls_latency/pjsip/bulk_pjsipcountcalls_serverzabbix.py"
 fi
 
 # ═══════════════════════════════════════════════════════════════

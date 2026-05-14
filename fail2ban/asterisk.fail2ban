@@ -1,0 +1,37 @@
+#!/bin/bash
+
+# Cargar .env desde la raíz del proyecto
+_ENV_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+[[ -f "${_ENV_ROOT}/.env" ]] && { set -a; source "${_ENV_ROOT}/.env"; set +a; }
+unset _ENV_ROOT
+
+ZABBIX_SERVER="${ZBX_SERVER:-127.0.0.1}"
+ZABBIX_PORT="${ZBX_PORT:-10051}"
+HOSTNAME="${ZBX_HOST_FAIL2BAN:-${ZBX_HOST:-Zabbix server}}"
+
+_send() {
+    /usr/bin/zabbix_sender -z "$ZABBIX_SERVER" -p "$ZABBIX_PORT" -s "$HOSTNAME" -k "$1" -o "$2" >/dev/null 2>&1
+}
+
+# Estado del servicio fail2ban
+STATUS=$(systemctl is-active fail2ban)
+if [[ "$STATUS" == "active" ]]; then
+    _send "fail2ban.status" 1
+else
+    _send "fail2ban.status" 0
+fi
+
+# Total de IPs baneadas en todas las jails
+TOTAL_BANNED=$(fail2ban-client status 2>/dev/null | grep -oP '(?<=Jail list:\s).*' | tr ',' '\n' | while read jail; do
+    jail=$(echo $jail | tr -d ' ')
+    fail2ban-client status "$jail" 2>/dev/null | grep "Currently banned" | awk '{print $NF}'
+done | awk '{s+=$1} END {print s+0}')
+_send "fail2ban.banned.total" "${TOTAL_BANNED:-0}"
+
+# Baneadas en jail asterisk-iptables
+BANNED_ASTERISK=$(fail2ban-client status asterisk-iptables 2>/dev/null | grep "Currently banned" | awk '{print $NF}')
+_send "fail2ban.banned.asterisk" "${BANNED_ASTERISK:-0}"
+
+# Baneadas en jail sshd
+BANNED_SSH=$(fail2ban-client status sshd 2>/dev/null | grep "Currently banned" | awk '{print $NF}')
+_send "fail2ban.banned.ssh" "${BANNED_SSH:-0}"

@@ -135,11 +135,11 @@ check_creds
 # ═══════════════════════════════════════════════════════════════
 # MÓDULO 1 — FAIL2BAN
 # ═══════════════════════════════════════════════════════════════
-module_header "FAIL2BAN (status_ast)"
+module_header "FAIL2BAN"
 
 run "Items fail2ban" \
     env ZBX_HOST="${ZBX_HOST_FAIL2BAN:-${ZBX_HOST:-Zabbix server}}" \
-    python3 "${SCRIPT_DIR}/status_ast/asterisk.fail2ban.bulk.py"
+    python3 "${SCRIPT_DIR}/fail2ban/asterisk.fail2ban.bulk.py"
 
 # ═══════════════════════════════════════════════════════════════
 # MÓDULO 2 — SIP (chan_sip)

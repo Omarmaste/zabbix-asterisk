@@ -1,54 +1,50 @@
 #!/usr/bin/env bash
 # =============================================================
 # install_zabbix.sh — Instala ítems y triggers en Zabbix
-# Módulos: fail2ban, sip, pjsip, countcalls, latencyagent, auditlog
+#
+# Módulos disponibles (directorios del proyecto):
+#   fail2ban | sip | pjsip | sensor_countcalls | wvx_latency_nr | wvx_auditlog
 #
 # Uso:
-#   bash install_zabbix.sh                              # instala todo
-#   bash install_zabbix.sh --skip-agent                 # no toca zabbix_agentd.conf
-#   bash install_zabbix.sh --skip-voip                  # omite fail2ban+SIP+PJSIP+countcalls
-#   bash install_zabbix.sh --signal_voip=SIP            # usa SIP   → excluye PJSIP
-#   bash install_zabbix.sh --signal_voip=PJSIP          # usa PJSIP → excluye SIP
-#   bash install_zabbix.sh --signal_voip=SIP,PJSIP      # usa ambos → no excluye nada
+#   bash install_zabbix.sh                          # instala todo
+#   bash install_zabbix.sh --skip-agent             # no toca zabbix_agentd.conf
+#   bash install_zabbix.sh --skip-<modulo>          # omite ese módulo
 #
-# Combinaciones frecuentes:
-#   --skip-agent --skip-voip          → solo latency + auditlog
-#   --skip-agent --signal_voip=SIP    → SIP+countcalls+latency+auditlog sin tocar agente
+# Ejemplos:
+#   bash install_zabbix.sh --skip-agent --skip-sip --skip-pjsip --skip-fail2ban \
+#                          --skip-sensor_countcalls --skip-wvx_auditlog
+#     → solo corre wvx_latency_nr
+#
+#   bash install_zabbix.sh --skip-agent --skip-pjsip --skip-sensor_countcalls
+#     → corre fail2ban + sip + wvx_latency_nr + wvx_auditlog
 # =============================================================
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SKIP_AGENT=0
-SKIP_VOIP=0
-EXCLUDE_SIP=0
-EXCLUDE_PJSIP=0
 
-# Parsear argumentos
+SKIP_AGENT=0
+SKIP_FAIL2BAN=0
+SKIP_SIP=0
+SKIP_PJSIP=0
+SKIP_SENSOR_COUNTCALLS=0
+SKIP_WVX_LATENCY_NR=0
+SKIP_WVX_AUDITLOG=0
+
 for arg in "$@"; do
     case "$arg" in
-        --skip-agent)
-            SKIP_AGENT=1
-            ;;
-        --skip-voip)
-            SKIP_VOIP=1
-            ;;
-        --signal_voip=*)
-            val="${arg#--signal_voip=}"
-            # El valor indica qué señalización SE USA → la otra se excluye.
-            has_sip=0; has_pjsip=0
-            IFS=',' read -ra voip_list <<< "$val"
-            for v in "${voip_list[@]}"; do
-                v_upper="${v^^}"
-                v_upper="${v_upper// /}"
-                [[ "$v_upper" == "SIP"   ]] && has_sip=1
-                [[ "$v_upper" == "PJSIP" ]] && has_pjsip=1
-            done
-            [[ $has_sip   -eq 0 ]] && EXCLUDE_SIP=1
-            [[ $has_pjsip -eq 0 ]] && EXCLUDE_PJSIP=1
-            ;;
+        --skip-agent)              SKIP_AGENT=1 ;;
+        --skip-fail2ban)           SKIP_FAIL2BAN=1 ;;
+        --skip-sip)                SKIP_SIP=1 ;;
+        --skip-pjsip)              SKIP_PJSIP=1 ;;
+        --skip-sensor_countcalls)  SKIP_SENSOR_COUNTCALLS=1 ;;
+        --skip-wvx_latency_nr)     SKIP_WVX_LATENCY_NR=1 ;;
+        --skip-wvx_auditlog)       SKIP_WVX_AUDITLOG=1 ;;
         *)
             echo "Argumento desconocido: $arg"
-            echo "Uso: bash install_zabbix.sh [--skip-agent] [--skip-voip] [--signal_voip=SIP|PJSIP|SIP,PJSIP]"
+            echo ""
+            echo "Uso: bash install_zabbix.sh [--skip-agent]"
+            echo "       [--skip-fail2ban] [--skip-sip] [--skip-pjsip]"
+            echo "       [--skip-sensor_countcalls] [--skip-wvx_latency_nr] [--skip-wvx_auditlog]"
             exit 1
             ;;
     esac
@@ -64,7 +60,7 @@ set -a; source "${SCRIPT_DIR}/.env"; set +a
 
 # ─── Colores ──────────────────────────────────────────────────
 R='\033[0;31m'; G='\033[0;32m'; Y='\033[1;33m'
-B='\033[1;34m'; C='\033[0;36m'; W='\033[1m'; N='\033[0m'
+B='\033[1;34m'; W='\033[1m'; N='\033[0m'
 
 # ─── Contadores ───────────────────────────────────────────────
 PASS=0; FAIL_COUNT=0; SKIP_COUNT=0
@@ -78,8 +74,6 @@ module_header() {
     echo -e "${B}${W}└──────────────────────────────────────────────────────┘${N}"
 }
 
-# run <label> <cmd...>
-# Ejecuta cmd, muestra OK/FAIL y las últimas líneas relevantes de output.
 run() {
     local label="$1"; shift
     printf "  %-54s" "$label"
@@ -119,51 +113,47 @@ echo -e "${N}"
 echo "  Servidor Zabbix : ${ZBX_URL:-<no configurado>}"
 echo "  Usuario         : ${ZBX_USER:-<no configurado>}"
 echo "  Fecha           : $(date '+%Y-%m-%d %H:%M:%S')"
+echo ""
 
-# Mostrar qué módulos se omiten
-if [[ $SKIP_VOIP -eq 1 ]]; then
-    echo -e "  ${Y}--skip-voip     : omite fail2ban, SIP, PJSIP, countcalls${N}"
-else
-    excluded_voip=()
-    [[ $EXCLUDE_SIP   -eq 1 ]] && excluded_voip+=("SIP")
-    [[ $EXCLUDE_PJSIP -eq 1 ]] && excluded_voip+=("PJSIP")
-    if [[ ${#excluded_voip[@]} -gt 0 ]]; then
-        echo -e "  ${Y}Excluidos       : ${excluded_voip[*]} (no son la señalización activa)${N}"
+# Mostrar módulos activos/skipped
+declare -A _MODS=(
+    [fail2ban]=$SKIP_FAIL2BAN
+    [sip]=$SKIP_SIP
+    [pjsip]=$SKIP_PJSIP
+    [sensor_countcalls]=$SKIP_SENSOR_COUNTCALLS
+    [wvx_latency_nr]=$SKIP_WVX_LATENCY_NR
+    [wvx_auditlog]=$SKIP_WVX_AUDITLOG
+)
+for mod in fail2ban sip pjsip sensor_countcalls wvx_latency_nr wvx_auditlog; do
+    if [[ ${_MODS[$mod]} -eq 1 ]]; then
+        printf "  ${Y}%-24s${N} SKIP\n" "$mod"
+    else
+        printf "  ${G}%-24s${N} RUN\n"  "$mod"
     fi
-fi
+done
 echo ""
 check_creds
 
 # ═══════════════════════════════════════════════════════════════
-# MÓDULOS 1–5 — ASTERISK/VOIP (omitidos con --skip-voip)
-# ═══════════════════════════════════════════════════════════════
-if [[ $SKIP_VOIP -eq 1 ]]; then
-    module_header "FAIL2BAN"
-    skip_step "fail2ban (--skip-voip)"
-    module_header "SIP — chan_sip"
-    skip_step "SIP (--skip-voip)"
-    module_header "PJSIP"
-    skip_step "PJSIP (--skip-voip)"
-    module_header "COUNTCALLS — SIP"
-    skip_step "countcalls SIP (--skip-voip)"
-    module_header "COUNTCALLS — PJSIP"
-    skip_step "countcalls PJSIP (--skip-voip)"
-else
-
 # MÓDULO 1 — FAIL2BAN
+# ═══════════════════════════════════════════════════════════════
 module_header "FAIL2BAN"
 
-run "Items fail2ban" \
-    env ZBX_HOST="${ZBX_HOST_FAIL2BAN:-${ZBX_HOST:-Zabbix server}}" \
-    python3 "${SCRIPT_DIR}/fail2ban/asterisk.fail2ban.bulk.py"
+if [[ $SKIP_FAIL2BAN -eq 1 ]]; then
+    skip_step "fail2ban (--skip-fail2ban)"
+else
+    run "Items fail2ban" \
+        env ZBX_HOST="${ZBX_HOST_FAIL2BAN:-${ZBX_HOST:-Zabbix server}}" \
+        python3 "${SCRIPT_DIR}/fail2ban/asterisk.fail2ban.bulk.py"
+fi
 
-# MÓDULO 2 — SIP (chan_sip)
+# ═══════════════════════════════════════════════════════════════
+# MÓDULO 2 — SIP
+# ═══════════════════════════════════════════════════════════════
 module_header "SIP — chan_sip  [host: ${ZBX_HOST_SIP:-${ZBX_HOST:-gatewayp}}]"
 
-if [[ $EXCLUDE_SIP -eq 1 ]]; then
-    skip_step "Módulo SIP excluido (señalización activa: PJSIP)"
-    skip_step "Items SIP en Zabbix"
-    skip_step "Triggers SIP en Zabbix"
+if [[ $SKIP_SIP -eq 1 ]]; then
+    skip_step "sip (--skip-sip)"
 else
     if [[ $SKIP_AGENT -eq 0 ]]; then
         run "Scripts agente + UserParameters SIP" \
@@ -171,23 +161,21 @@ else
     else
         skip_step "Scripts agente SIP (--skip-agent)"
     fi
-
     run "Items SIP en Zabbix" \
         env ZBX_HOST="${ZBX_HOST_SIP:-${ZBX_HOST:-gatewayp}}" \
         python3 "${SCRIPT_DIR}/sip/bulk_sipdevice_serverzabbix.py"
-
     run "Triggers SIP en Zabbix" \
         env ZBX_HOST="${ZBX_HOST_SIP:-${ZBX_HOST:-gatewayp}}" \
         python3 "${SCRIPT_DIR}/sip/bulk_sipdevice_trigger_serverzabbix.py"
 fi
 
+# ═══════════════════════════════════════════════════════════════
 # MÓDULO 3 — PJSIP
+# ═══════════════════════════════════════════════════════════════
 module_header "PJSIP  [host: ${ZBX_HOST_PJSIP:-${ZBX_HOST:-gatewayd}}]"
 
-if [[ $EXCLUDE_PJSIP -eq 1 ]]; then
-    skip_step "Módulo PJSIP excluido (señalización activa: SIP)"
-    skip_step "Items PJSIP en Zabbix"
-    skip_step "Triggers PJSIP en Zabbix"
+if [[ $SKIP_PJSIP -eq 1 ]]; then
+    skip_step "pjsip (--skip-pjsip)"
 else
     if [[ $SKIP_AGENT -eq 0 ]]; then
         run "Scripts agente + UserParameters PJSIP" \
@@ -195,80 +183,67 @@ else
     else
         skip_step "Scripts agente PJSIP (--skip-agent)"
     fi
-
     run "Items PJSIP en Zabbix" \
         env ZBX_HOST="${ZBX_HOST_PJSIP:-${ZBX_HOST:-gatewayd}}" \
         python3 "${SCRIPT_DIR}/pjsip/bulk_pjsipdevice_serverzabbix.py"
-
     run "Triggers PJSIP en Zabbix" \
         env ZBX_HOST="${ZBX_HOST_PJSIP:-${ZBX_HOST:-gatewayd}}" \
         python3 "${SCRIPT_DIR}/pjsip/bulk_pjsipdevice_trigger_serverzabbix.py"
 fi
 
-# MÓDULO 4 — COUNTCALLS SIP
-module_header "COUNTCALLS — SIP  [host: ${ZBX_HOST_COUNTCALLS:-${ZBX_HOST:-startgroup}}]"
+# ═══════════════════════════════════════════════════════════════
+# MÓDULO 4 — SENSOR COUNTCALLS
+# ═══════════════════════════════════════════════════════════════
+module_header "SENSOR COUNTCALLS  [host: ${ZBX_HOST_COUNTCALLS:-${ZBX_HOST:-startgroup}}]"
 
-if [[ $EXCLUDE_SIP -eq 1 ]]; then
-    skip_step "Módulo countcalls SIP excluido (señalización activa: PJSIP)"
-    skip_step "Items countcalls SIP en Zabbix"
+if [[ $SKIP_SENSOR_COUNTCALLS -eq 1 ]]; then
+    skip_step "sensor_countcalls (--skip-sensor_countcalls)"
 else
     if [[ $SKIP_AGENT -eq 0 ]]; then
         run "Scripts conteo + UserParameters SIP" \
             bash "${SCRIPT_DIR}/sensor_countcalls/bulk_sipcountcalls_scripts.sh"
-    else
-        skip_step "Scripts conteo SIP (--skip-agent)"
-    fi
-
-    run "Items countcalls SIP en Zabbix" \
-        env ZBX_HOST="${ZBX_HOST_COUNTCALLS:-${ZBX_HOST:-startgroup}}" \
-        python3 "${SCRIPT_DIR}/sensor_countcalls/bulk_sipcountcalls_serverzabbix.py"
-fi
-
-# MÓDULO 5 — COUNTCALLS PJSIP
-module_header "COUNTCALLS — PJSIP  [host: ${ZBX_HOST_COUNTCALLS_PJSIP:-${ZBX_HOST:-nueveonce}}]"
-
-if [[ $EXCLUDE_PJSIP -eq 1 ]]; then
-    skip_step "Módulo countcalls PJSIP excluido (señalización activa: SIP)"
-    skip_step "Items countcalls PJSIP en Zabbix"
-else
-    if [[ $SKIP_AGENT -eq 0 ]]; then
         run "Scripts conteo + UserParameters PJSIP" \
             bash "${SCRIPT_DIR}/sensor_countcalls/pjsip/bulk_pjsipcountcalls_scripts.sh"
     else
+        skip_step "Scripts conteo SIP (--skip-agent)"
         skip_step "Scripts conteo PJSIP (--skip-agent)"
     fi
-
+    run "Items countcalls SIP en Zabbix" \
+        env ZBX_HOST="${ZBX_HOST_COUNTCALLS:-${ZBX_HOST:-startgroup}}" \
+        python3 "${SCRIPT_DIR}/sensor_countcalls/bulk_sipcountcalls_serverzabbix.py"
     run "Items countcalls PJSIP en Zabbix" \
         env ZBX_HOST="${ZBX_HOST_COUNTCALLS_PJSIP:-${ZBX_HOST:-nueveonce}}" \
         python3 "${SCRIPT_DIR}/sensor_countcalls/pjsip/bulk_pjsipcountcalls_serverzabbix.py"
 fi
 
-fi  # end SKIP_VOIP
+# ═══════════════════════════════════════════════════════════════
+# MÓDULO 5 — WVX LATENCY NR
+# ═══════════════════════════════════════════════════════════════
+module_header "WVX LATENCY NR  [host: ${LATENCY_ZBX_HOST:-${ZBX_HOST:-ippbx-cloud-issa5-redplus}}]"
+
+if [[ $SKIP_WVX_LATENCY_NR -eq 1 ]]; then
+    skip_step "wvx_latency_nr (--skip-wvx_latency_nr)"
+else
+    run "Items latencia en Zabbix" \
+        python3 "${SCRIPT_DIR}/wvx_latency_nr/create_latency_items.py"
+    run "Items network rejection en Zabbix" \
+        python3 "${SCRIPT_DIR}/wvx_latency_nr/create_nr_items.py"
+fi
 
 # ═══════════════════════════════════════════════════════════════
-# MÓDULO 6 — LATENCY AGENT
-# ═══════════════════════════════════════════════════════════════
-module_header "LATENCY AGENT  [host: ${LATENCY_ZBX_HOST:-ippbx-cloud-issa5-redplus}]"
-
-run "Items latencia en Zabbix" \
-    python3 "${SCRIPT_DIR}/latencyagent/create_latency_items.py"
-
-run "Items network rejection en Zabbix" \
-    python3 "${SCRIPT_DIR}/latencyagent/create_nr_items.py"
-
-# ═══════════════════════════════════════════════════════════════
-# MÓDULO 7 — WVX AUDIT LOG
+# MÓDULO 6 — WVX AUDIT LOG
 # ═══════════════════════════════════════════════════════════════
 module_header "WVX AUDIT LOG  [host: ${ZBX_HOST_AUDITLOG:-${ZBX_HOST:-monitoralo}}]"
 
-if [[ -z "${WVX_OPERATIONS:-}" ]]; then
+if [[ $SKIP_WVX_AUDITLOG -eq 1 ]]; then
+    skip_step "wvx_auditlog (--skip-wvx_auditlog)"
+elif [[ -z "${WVX_OPERATIONS:-}" ]]; then
     skip_step "WVX_OPERATIONS vacío en .env — omitido"
 else
     for op in $WVX_OPERATIONS; do
         run "Items auditlog [$op]" \
             env ZBX_HOST="${ZBX_HOST_AUDITLOG:-${ZBX_HOST:-monitoralo}}" \
             python3 "${SCRIPT_DIR}/wvx_auditlog/create_items_auditlog.py" "$op"
-
         run "Triggers auditlog [$op]" \
             env ZBX_HOST="${ZBX_HOST_AUDITLOG:-${ZBX_HOST:-monitoralo}}" \
             python3 "${SCRIPT_DIR}/wvx_auditlog/create_trigger.py" "$op"

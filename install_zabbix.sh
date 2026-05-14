@@ -2,49 +2,51 @@
 # =============================================================
 # install_zabbix.sh — Instala ítems y triggers en Zabbix
 #
-# Módulos disponibles (directorios del proyecto):
-#   fail2ban | sip | pjsip | sensor_countcalls | wvx_latency_nr | wvx_auditlog
+# Módulos (= directorios del proyecto):
+#   ast_fail2ban | ast_sip | ast_pjsip | ast_countcalls_latency
+#   wvx_latency_nr | wvx_auditlog
 #
 # Uso:
 #   bash install_zabbix.sh                          # instala todo
-#   bash install_zabbix.sh --skip-agent             # no toca zabbix_agentd.conf
 #   bash install_zabbix.sh --skip-<modulo>          # omite ese módulo
 #
-# Ejemplos:
-#   bash install_zabbix.sh --skip-agent --skip-sip --skip-pjsip --skip-fail2ban \
-#                          --skip-sensor_countcalls --skip-wvx_auditlog
-#     → solo corre wvx_latency_nr
+# Nota: si ast_sip, ast_pjsip o ast_countcalls_latency están activos,
+#       sus scripts de agente se escriben en zabbix_agentd.conf automáticamente.
 #
-#   bash install_zabbix.sh --skip-agent --skip-pjsip --skip-sensor_countcalls
-#     → corre fail2ban + sip + wvx_latency_nr + wvx_auditlog
+# Ejemplos:
+#   # Solo wvx_latency_nr:
+#   bash install_zabbix.sh --skip-ast_fail2ban --skip-ast_sip --skip-ast_pjsip \
+#                          --skip-ast_countcalls_latency --skip-wvx_auditlog
+#
+#   # Solo módulos Wolkvox:
+#   bash install_zabbix.sh --skip-ast_fail2ban --skip-ast_sip --skip-ast_pjsip \
+#                          --skip-ast_countcalls_latency
 # =============================================================
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-SKIP_AGENT=0
-SKIP_FAIL2BAN=0
-SKIP_SIP=0
-SKIP_PJSIP=0
+SKIP_AST_FAIL2BAN=0
+SKIP_AST_SIP=0
+SKIP_AST_PJSIP=0
 SKIP_AST_COUNTCALLS_LATENCY=0
 SKIP_WVX_LATENCY_NR=0
 SKIP_WVX_AUDITLOG=0
 
 for arg in "$@"; do
     case "$arg" in
-        --skip-agent)              SKIP_AGENT=1 ;;
-        --skip-fail2ban)           SKIP_FAIL2BAN=1 ;;
-        --skip-sip)                SKIP_SIP=1 ;;
-        --skip-pjsip)              SKIP_PJSIP=1 ;;
+        --skip-ast_fail2ban)           SKIP_AST_FAIL2BAN=1 ;;
+        --skip-ast_sip)                SKIP_AST_SIP=1 ;;
+        --skip-ast_pjsip)              SKIP_AST_PJSIP=1 ;;
         --skip-ast_countcalls_latency) SKIP_AST_COUNTCALLS_LATENCY=1 ;;
-        --skip-wvx_latency_nr)     SKIP_WVX_LATENCY_NR=1 ;;
-        --skip-wvx_auditlog)       SKIP_WVX_AUDITLOG=1 ;;
+        --skip-wvx_latency_nr)         SKIP_WVX_LATENCY_NR=1 ;;
+        --skip-wvx_auditlog)           SKIP_WVX_AUDITLOG=1 ;;
         *)
             echo "Argumento desconocido: $arg"
             echo ""
-            echo "Uso: bash install_zabbix.sh [--skip-agent]"
-            echo "       [--skip-fail2ban] [--skip-sip] [--skip-pjsip]"
-            echo "       [--skip-ast_countcalls_latency] [--skip-wvx_latency_nr] [--skip-wvx_auditlog]"
+            echo "Uso: bash install_zabbix.sh [--skip-<modulo>]"
+            echo "  Módulos: ast_fail2ban  ast_sip  ast_pjsip"
+            echo "           ast_countcalls_latency  wvx_latency_nr  wvx_auditlog"
             exit 1
             ;;
     esac
@@ -115,99 +117,85 @@ echo "  Usuario         : ${ZBX_USER:-<no configurado>}"
 echo "  Fecha           : $(date '+%Y-%m-%d %H:%M:%S')"
 echo ""
 
-# Mostrar módulos activos/skipped
 declare -A _MODS=(
-    [fail2ban]=$SKIP_FAIL2BAN
-    [sip]=$SKIP_SIP
-    [pjsip]=$SKIP_PJSIP
+    [ast_fail2ban]=$SKIP_AST_FAIL2BAN
+    [ast_sip]=$SKIP_AST_SIP
+    [ast_pjsip]=$SKIP_AST_PJSIP
     [ast_countcalls_latency]=$SKIP_AST_COUNTCALLS_LATENCY
     [wvx_latency_nr]=$SKIP_WVX_LATENCY_NR
     [wvx_auditlog]=$SKIP_WVX_AUDITLOG
 )
-for mod in fail2ban sip pjsip ast_countcalls_latency wvx_latency_nr wvx_auditlog; do
+for mod in ast_fail2ban ast_sip ast_pjsip ast_countcalls_latency wvx_latency_nr wvx_auditlog; do
     if [[ ${_MODS[$mod]} -eq 1 ]]; then
-        printf "  ${Y}%-24s${N} SKIP\n" "$mod"
+        printf "  ${Y}%-28s${N} SKIP\n" "$mod"
     else
-        printf "  ${G}%-24s${N} RUN\n"  "$mod"
+        printf "  ${G}%-28s${N} RUN\n"  "$mod"
     fi
 done
 echo ""
 check_creds
 
 # ═══════════════════════════════════════════════════════════════
-# MÓDULO 1 — FAIL2BAN
+# MÓDULO 1 — AST FAIL2BAN
 # ═══════════════════════════════════════════════════════════════
-module_header "FAIL2BAN"
+module_header "AST FAIL2BAN"
 
-if [[ $SKIP_FAIL2BAN -eq 1 ]]; then
-    skip_step "fail2ban (--skip-fail2ban)"
+if [[ $SKIP_AST_FAIL2BAN -eq 1 ]]; then
+    skip_step "ast_fail2ban (--skip-ast_fail2ban)"
 else
     run "Items fail2ban" \
         env ZBX_HOST="${ZBX_HOST_FAIL2BAN:-${ZBX_HOST:-Zabbix server}}" \
-        python3 "${SCRIPT_DIR}/fail2ban/asterisk.fail2ban.bulk.py"
+        python3 "${SCRIPT_DIR}/ast_fail2ban/asterisk.fail2ban.bulk.py"
 fi
 
 # ═══════════════════════════════════════════════════════════════
-# MÓDULO 2 — SIP
+# MÓDULO 2 — AST SIP
 # ═══════════════════════════════════════════════════════════════
-module_header "SIP — chan_sip  [host: ${ZBX_HOST_SIP:-${ZBX_HOST:-gatewayp}}]"
+module_header "AST SIP  [host: ${ZBX_HOST_SIP:-${ZBX_HOST:-gatewayp}}]"
 
-if [[ $SKIP_SIP -eq 1 ]]; then
-    skip_step "sip (--skip-sip)"
+if [[ $SKIP_AST_SIP -eq 1 ]]; then
+    skip_step "ast_sip (--skip-ast_sip)"
 else
-    if [[ $SKIP_AGENT -eq 0 ]]; then
-        run "Scripts agente + UserParameters SIP" \
-            bash "${SCRIPT_DIR}/sip/bulk_sipdevice_scripts.sh"
-    else
-        skip_step "Scripts agente SIP (--skip-agent)"
-    fi
+    run "Scripts agente + UserParameters SIP" \
+        bash "${SCRIPT_DIR}/ast_sip/bulk_sipdevice_scripts.sh"
     run "Items SIP en Zabbix" \
         env ZBX_HOST="${ZBX_HOST_SIP:-${ZBX_HOST:-gatewayp}}" \
-        python3 "${SCRIPT_DIR}/sip/bulk_sipdevice_serverzabbix.py"
+        python3 "${SCRIPT_DIR}/ast_sip/bulk_sipdevice_serverzabbix.py"
     run "Triggers SIP en Zabbix" \
         env ZBX_HOST="${ZBX_HOST_SIP:-${ZBX_HOST:-gatewayp}}" \
-        python3 "${SCRIPT_DIR}/sip/bulk_sipdevice_trigger_serverzabbix.py"
+        python3 "${SCRIPT_DIR}/ast_sip/bulk_sipdevice_trigger_serverzabbix.py"
 fi
 
 # ═══════════════════════════════════════════════════════════════
-# MÓDULO 3 — PJSIP
+# MÓDULO 3 — AST PJSIP
 # ═══════════════════════════════════════════════════════════════
-module_header "PJSIP  [host: ${ZBX_HOST_PJSIP:-${ZBX_HOST:-gatewayd}}]"
+module_header "AST PJSIP  [host: ${ZBX_HOST_PJSIP:-${ZBX_HOST:-gatewayd}}]"
 
-if [[ $SKIP_PJSIP -eq 1 ]]; then
-    skip_step "pjsip (--skip-pjsip)"
+if [[ $SKIP_AST_PJSIP -eq 1 ]]; then
+    skip_step "ast_pjsip (--skip-ast_pjsip)"
 else
-    if [[ $SKIP_AGENT -eq 0 ]]; then
-        run "Scripts agente + UserParameters PJSIP" \
-            bash "${SCRIPT_DIR}/pjsip/bulk_pjsipdevice_scripts.sh"
-    else
-        skip_step "Scripts agente PJSIP (--skip-agent)"
-    fi
+    run "Scripts agente + UserParameters PJSIP" \
+        bash "${SCRIPT_DIR}/ast_pjsip/bulk_pjsipdevice_scripts.sh"
     run "Items PJSIP en Zabbix" \
         env ZBX_HOST="${ZBX_HOST_PJSIP:-${ZBX_HOST:-gatewayd}}" \
-        python3 "${SCRIPT_DIR}/pjsip/bulk_pjsipdevice_serverzabbix.py"
+        python3 "${SCRIPT_DIR}/ast_pjsip/bulk_pjsipdevice_serverzabbix.py"
     run "Triggers PJSIP en Zabbix" \
         env ZBX_HOST="${ZBX_HOST_PJSIP:-${ZBX_HOST:-gatewayd}}" \
-        python3 "${SCRIPT_DIR}/pjsip/bulk_pjsipdevice_trigger_serverzabbix.py"
+        python3 "${SCRIPT_DIR}/ast_pjsip/bulk_pjsipdevice_trigger_serverzabbix.py"
 fi
 
 # ═══════════════════════════════════════════════════════════════
-# MÓDULO 4 — SENSOR COUNTCALLS
+# MÓDULO 4 — AST COUNTCALLS LATENCY
 # ═══════════════════════════════════════════════════════════════
 module_header "AST COUNTCALLS LATENCY  [host: ${ZBX_HOST_COUNTCALLS:-${ZBX_HOST:-startgroup}}]"
 
 if [[ $SKIP_AST_COUNTCALLS_LATENCY -eq 1 ]]; then
     skip_step "ast_countcalls_latency (--skip-ast_countcalls_latency)"
 else
-    if [[ $SKIP_AGENT -eq 0 ]]; then
-        run "Scripts conteo + UserParameters SIP" \
-            bash "${SCRIPT_DIR}/ast_countcalls_latency/bulk_sipcountcalls_scripts.sh"
-        run "Scripts conteo + UserParameters PJSIP" \
-            bash "${SCRIPT_DIR}/ast_countcalls_latency/pjsip/bulk_pjsipcountcalls_scripts.sh"
-    else
-        skip_step "Scripts conteo SIP (--skip-agent)"
-        skip_step "Scripts conteo PJSIP (--skip-agent)"
-    fi
+    run "Scripts conteo + UserParameters SIP" \
+        bash "${SCRIPT_DIR}/ast_countcalls_latency/bulk_sipcountcalls_scripts.sh"
+    run "Scripts conteo + UserParameters PJSIP" \
+        bash "${SCRIPT_DIR}/ast_countcalls_latency/pjsip/bulk_pjsipcountcalls_scripts.sh"
     run "Items countcalls SIP en Zabbix" \
         env ZBX_HOST="${ZBX_HOST_COUNTCALLS:-${ZBX_HOST:-startgroup}}" \
         python3 "${SCRIPT_DIR}/ast_countcalls_latency/bulk_sipcountcalls_serverzabbix.py"

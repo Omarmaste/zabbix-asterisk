@@ -6,7 +6,7 @@ Detectar Fail2ban caido
 ========================
 se coloca en el cron
 cat  /etc/crontab
-*/5 * * * * /bin/bash /etc/zabbix/scripts/asterisk.fail2ban >/dev/null 2>&1
+*/5 * * * * root /bin/bash /etc/zabbix/scripts/asterisk.fail2ban >/dev/null 2>&1
 
 
 Trigger en Zabbix

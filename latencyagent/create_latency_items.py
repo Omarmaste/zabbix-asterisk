@@ -1,15 +1,28 @@
 #!/usr/bin/env python3
 # Crea/actualiza items TRAPPER para latencia de agentes
-import json, subprocess, requests, time
+import json, os, subprocess, requests, time
 
-ZBX_URL   = "http://IP/zabbix/api_jsonrpc.php"
-ZBX_USER  = "user"
-ZBX_PASS  = "pass"
-HOST_NAME = "ippbx-cloud-issa5-redplus"
+# Carga .env desde la raíz del proyecto (sin dependencias externas)
+import pathlib as _pl, os as _os
+_ef = next((p / ".env" for p in _pl.Path(__file__).resolve().parents if (p / ".env").is_file()), None)
+if _ef:
+    for _l in open(_ef):
+        _l = _l.strip()
+        if _l and not _l.startswith('#') and '=' in _l:
+            _k, _, _v = _l.partition('=')
+            _k, _v = _k.strip(), _v.strip().strip('"').strip("'")
+            if _k and _k not in _os.environ:
+                _os.environ[_k] = _v
+del _pl, _os, _ef
 
-WOLKVOX_URL    = "https://wv0025.wolkvox.com/api/v2/real_time.php"
-WOLKVOX_SERVER = "00XX"
-WOLKVOX_TOKEN  = "TOKEN"
+ZBX_URL   = os.environ.get("ZBX_URL",        "http://IP/zabbix/api_jsonrpc.php")
+ZBX_USER  = os.environ.get("ZBX_USER",       "Admin")
+ZBX_PASS  = os.environ.get("ZBX_PASS",       "CHANGE_ME")
+HOST_NAME = os.environ.get("LATENCY_ZBX_HOST", os.environ.get("ZBX_HOST", "ippbx-cloud-issa5-redplus"))
+
+WOLKVOX_URL    = os.environ.get("WOLKVOX_URL",    "https://wv0025.wolkvox.com/api/v2/real_time.php")
+WOLKVOX_SERVER = os.environ.get("WOLKVOX_SERVER", "00XX")
+WOLKVOX_TOKEN  = os.environ.get("WOLKVOX_TOKEN",  "CHANGE_ME")
 
 DELAY_BETWEEN_REQUESTS = 0.3
 MAX_RETRIES = 2

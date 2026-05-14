@@ -10,9 +10,22 @@ Ejemplos:
 """
 
 import json
+import os
 import requests
 import sys
-import os
+
+# Carga .env desde la raíz del proyecto (sin dependencias externas)
+import pathlib as _pl, os as _os
+_ef = next((p / ".env" for p in _pl.Path(__file__).resolve().parents if (p / ".env").is_file()), None)
+if _ef:
+    for _l in open(_ef):
+        _l = _l.strip()
+        if _l and not _l.startswith('#') and '=' in _l:
+            _k, _, _v = _l.partition('=')
+            _k, _v = _k.strip(), _v.strip().strip('"').strip("'")
+            if _k and _k not in _os.environ:
+                _os.environ[_k] = _v
+del _pl, _os, _ef
 
 # ========= VALIDACIÓN DE ARGUMENTOS =========
 if len(sys.argv) < 2:
@@ -27,12 +40,12 @@ if len(sys.argv) < 2:
     sys.exit(1)
 
 WVX_OPERACION = sys.argv[1]
-HOST_NAME = sys.argv[2] if len(sys.argv) > 2 else "monitoralo"
+HOST_NAME = sys.argv[2] if len(sys.argv) > 2 else os.environ.get("ZBX_HOST_AUDITLOG", os.environ.get("ZBX_HOST", "monitoralo"))
 
 # ========= ZABBIX =========
-ZBX_URL   = "http://IP/zabbix/api_jsonrpc.php"
-ZBX_USER  = "user"
-ZBX_PASS  = "pass"
+ZBX_URL   = os.environ.get("ZBX_URL",  "http://IP/zabbix/api_jsonrpc.php")
+ZBX_USER  = os.environ.get("ZBX_USER", "Admin")
+ZBX_PASS  = os.environ.get("ZBX_PASS", "CHANGE_ME")
 
 # ========= TIPOS DE ALERTAS =========
 # Cada tipo se detecta por patrón en el campo "action"

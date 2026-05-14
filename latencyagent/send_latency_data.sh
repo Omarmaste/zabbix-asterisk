@@ -1,14 +1,19 @@
 #!/usr/bin/env bash
 set -uo pipefail
 
-ZBX_SERVER="68.183.116.34"
-ZBX_PORT="10051"
-ZBX_HOST="ippbx-cloud-issa5-redplus"
-WOLKVOX_SERVER="00XX"
-WOLKVOX_TOKEN="TOKEN"
+# Carga .env del proyecto si existe (retrocompatible: si no existe, usa los defaults)
+_ENV_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+[[ -f "${_ENV_ROOT}/.env" ]] && { set -a; source "${_ENV_ROOT}/.env"; set +a; }
+unset _ENV_ROOT
+
+ZBX_SERVER="${ZBX_SERVER:-68.183.116.34}"
+ZBX_PORT="${ZBX_PORT:-10051}"
+ZBX_HOST="${LATENCY_ZBX_HOST:-${ZBX_HOST:-ippbx-cloud-issa5-redplus}}"
+WOLKVOX_SERVER="${WOLKVOX_SERVER:-00XX}"
+WOLKVOX_TOKEN="${WOLKVOX_TOKEN:-TOKEN}"
 API_URL="https://wv${WOLKVOX_SERVER}.wolkvox.com/api/v2/real_time.php?api=latency"
 
-BASE_DIR="/etc/zabbix/scripts/wvx_latency_agent"
+BASE_DIR="${LATENCY_BASE_DIR:-/etc/zabbix/scripts/wvx_latency_agent}"
 STATE_FILE="${BASE_DIR}/agent_latency_state.json"
 TMP_FILE="${BASE_DIR}/agent_latency_batch.txt"
 CURL_OUTPUT="${BASE_DIR}/agent_latency_curl.json"

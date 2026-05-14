@@ -3,14 +3,28 @@
 # Crea automáticamente los items de fail2ban en Zabbix via API
 
 import json
+import os
 import urllib.request
 import urllib.error
 
+# Carga .env desde la raíz del proyecto (sin dependencias externas)
+import pathlib as _pl, os as _os
+_ef = next((p / ".env" for p in _pl.Path(__file__).resolve().parents if (p / ".env").is_file()), None)
+if _ef:
+    for _l in open(_ef):
+        _l = _l.strip()
+        if _l and not _l.startswith('#') and '=' in _l:
+            _k, _, _v = _l.partition('=')
+            _k, _v = _k.strip(), _v.strip().strip('"').strip("'")
+            if _k and _k not in _os.environ:
+                _os.environ[_k] = _v
+del _pl, _os, _ef
+
 # ─── CONFIGURACIÓN ───────────────────────────────────────────────
-ZABBIX_URL    = "http://localhost:8082/api_jsonrpc.php"
-ZABBIX_USER   = "Admin"
-ZABBIX_PASS   = "zabbix"
-HOST_NAME     = "Zabbix server"
+ZABBIX_URL  = os.environ.get("ZBX_URL",          "http://localhost/zabbix/api_jsonrpc.php")
+ZABBIX_USER = os.environ.get("ZBX_USER",         "Admin")
+ZABBIX_PASS = os.environ.get("ZBX_PASS",         "CHANGE_ME")
+HOST_NAME   = os.environ.get("ZBX_HOST_FAIL2BAN", os.environ.get("ZBX_HOST", "Zabbix server"))
 # ─────────────────────────────────────────────────────────────────
 
 ITEMS = [

@@ -3,6 +3,11 @@
 
 set -euo pipefail
 
+# Carga .env del proyecto si existe (retrocompatible: si no existe, usa los defaults)
+_ENV_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+[[ -f "${_ENV_ROOT}/.env" ]] && { set -a; source "${_ENV_ROOT}/.env"; set +a; }
+unset _ENV_ROOT
+
 # ======= Variables configurables =======
 ASTERISK_BIN="${ASTERISK_BIN:-/usr/sbin/asterisk}"           # binario de asterisk
 ZABBIX_CONF="${ZABBIX_CONF:-/etc/zabbix/zabbix_agentd.conf}" # config Zabbix Agent

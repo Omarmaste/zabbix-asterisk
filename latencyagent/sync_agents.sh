@@ -4,8 +4,14 @@
 
 set -uo pipefail
 
-BASE_DIR="/etc/zabbix/scripts/wvx_latency_agent"
-LOG_DIR="/var/log/zabbix"
+# Carga .env del proyecto si existe (retrocompatible: si no existe, usa los defaults)
+_ENV_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+[[ -f "${_ENV_ROOT}/.env" ]] && { set -a; source "${_ENV_ROOT}/.env"; set +a; }
+unset _ENV_ROOT
+
+# Directorio de los scripts Python (mismo directorio que este script)
+SCRIPTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LOG_DIR="${LATENCY_LOG_DIR:-/var/log/zabbix}"
 LOG_FILE="${LOG_DIR}/sync_agents.log"
 
 mkdir -p "$LOG_DIR"
@@ -18,13 +24,13 @@ mkdir -p "$LOG_DIR"
 
   echo ""
   echo ">>> Sincronizando items de LATENCIA..."
-  /usr/bin/python3 "${BASE_DIR}/create_latency_items.py"
+  /usr/bin/python3 "${SCRIPTS_DIR}/create_latency_items.py"
   RC1=$?
   echo ">>> Exit code latency: $RC1"
 
   echo ""
   echo ">>> Sincronizando items de NETWORK REJECTION..."
-  /usr/bin/python3 "${BASE_DIR}/create_nr_items.py"
+  /usr/bin/python3 "${SCRIPTS_DIR}/create_nr_items.py"
   RC2=$?
   echo ">>> Exit code NR: $RC2"
 

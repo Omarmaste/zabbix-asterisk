@@ -7,6 +7,7 @@ v2 - Cambios respecto a v1:
 """
 import argparse
 import json
+import os
 import re
 import sys
 import requests
@@ -14,25 +15,38 @@ import urllib3
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
+# Carga .env desde la raíz del proyecto (sin dependencias externas)
+import pathlib as _pl, os as _os
+_ef = next((p / ".env" for p in _pl.Path(__file__).resolve().parents if (p / ".env").is_file()), None)
+if _ef:
+    for _l in open(_ef):
+        _l = _l.strip()
+        if _l and not _l.startswith('#') and '=' in _l:
+            _k, _, _v = _l.partition('=')
+            _k, _v = _k.strip(), _v.strip().strip('"').strip("'")
+            if _k and _k not in _os.environ:
+                _os.environ[_k] = _v
+del _pl, _os, _ef
+
 # ============================================================
-# CONFIGURACIÓN — AJUSTAR
+# CONFIGURACIÓN — valores desde .env o variables de entorno
 # ============================================================
 
 # Zabbix
-ZBX_URL   = "http://68.183.116.34/zabbix/api_jsonrpc.php"
-ZBX_USER  = "user"
-ZBX_PASS  = "pass"
-HOST_NAME = "ippbx-cloud-issa5-redplus"
+ZBX_URL   = os.environ.get("ZBX_URL",        "http://68.183.116.34/zabbix/api_jsonrpc.php")
+ZBX_USER  = os.environ.get("ZBX_USER",       "Admin")
+ZBX_PASS  = os.environ.get("ZBX_PASS",       "CHANGE_ME")
+HOST_NAME = os.environ.get("LATENCY_ZBX_HOST", os.environ.get("ZBX_HOST", "ippbx-cloud-issa5-redplus"))
 
-# Grafana — RELLENAR ESTOS 3 VALORES
-GRAFANA_URL    = "URL"   # <-- ej: http://68.183.116.34:3000
-DASHBOARD_UID  = ".................3fca6" # <-- saca de la URL: /d/<UID>/...
-GRAFANA_DS_UID = ".....y5fkd"                  # <-- UID del datasource Zabbix (ya viene del JSON que pegaste)
+# Grafana
+GRAFANA_URL    = os.environ.get("GRAFANA_URL",           "http://68.183.116.34:3000")
+DASHBOARD_UID  = os.environ.get("GRAFANA_DASHBOARD_UID", "CHANGE_ME")
+GRAFANA_DS_UID = os.environ.get("GRAFANA_DS_UID",        "CHANGE_ME")
 
-# Autenticación Grafana — usa UNA de las dos opciones:
-GRAFANA_TOKEN  = "glsa_...............4d5c"              # opción 1 (recomendado): service account token
-GRAFANA_USER   = "user"         # opción 2: usuario+pass (si TOKEN vacío)
-GRAFANA_PASS   = "pass"
+# Autenticación Grafana — opción 1 (token) tiene prioridad sobre usuario+pass
+GRAFANA_TOKEN  = os.environ.get("GRAFANA_TOKEN", "")
+GRAFANA_USER   = os.environ.get("GRAFANA_USER",  "admin")
+GRAFANA_PASS   = os.environ.get("GRAFANA_PASS",  "CHANGE_ME")
 
 # Layout
 PANELS_PER_ROW = 8

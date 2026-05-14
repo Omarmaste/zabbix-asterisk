@@ -22,22 +22,34 @@ WVX_OPERACION="$1"
 DEBUG=0
 [[ "${2:-}" == "--debug" ]] && DEBUG=1
 
+# Carga .env del proyecto si existe (retrocompatible: si no existe, usa los defaults)
+_ENV_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+[[ -f "${_ENV_ROOT}/.env" ]] && { set -a; source "${_ENV_ROOT}/.env"; set +a; }
+unset _ENV_ROOT
+
 # ========= CONFIGURACIÓN BASE =========
-ZBX_SERVER="IP"
-ZBX_PORT="10051"
-ZBX_HOST="monitoralo"
+ZBX_SERVER="${ZBX_SERVER:-68.183.116.34}"
+ZBX_PORT="${ZBX_PORT:-10051}"
+ZBX_HOST="${ZBX_HOST_AUDITLOG:-monitoralo}"
 
 # ========= CONFIGURACIÓN POR OPERACIÓN =========
+# Cada entrada cae al global WOLKVOX_SERVER/TOKEN/TIMEZONE_DEFAULT si no
+# hay override específico en .env (WOLKVOX_SERVER_<OP>, WOLKVOX_TOKEN_<OP>).
 case "$WVX_OPERACION" in
+    wb_redplus_usa)
+        WOLKVOX_SERVER="${WOLKVOX_SERVER_WB_REDPLUS_USA:-${WOLKVOX_SERVER:-0036}}"
+        WOLKVOX_TOKEN="${WOLKVOX_TOKEN_WB_REDPLUS_USA:-${WOLKVOX_TOKEN:-CHANGE_ME}}"
+        TIMEZONE="${TIMEZONE_WB_REDPLUS_USA:-${TIMEZONE_DEFAULT:-America/New_York}}"
+        ;;
     aloglobal-stargroup-cis)
-        WOLKVOX_SERVER="0041"
-        WOLKVOX_TOKEN="token"
-        TIMEZONE="America/Mexico_City"  # Colombia (UTC-5)
+        WOLKVOX_SERVER="${WOLKVOX_SERVER_ALOGLOBAL:-${WOLKVOX_SERVER:-0036}}"
+        WOLKVOX_TOKEN="${WOLKVOX_TOKEN_ALOGLOBAL:-${WOLKVOX_TOKEN:-CHANGE_ME}}"
+        TIMEZONE="${TIMEZONE_ALOGLOBAL:-${TIMEZONE_DEFAULT:-America/Mexico_City}}"
         ;;
     alo-proyectos)
-        WOLKVOX_SERVER="0051"
-        WOLKVOX_TOKEN="token"
-        TIMEZONE="America/Bogota"  # Colombia (UTC-5)
+        WOLKVOX_SERVER="${WOLKVOX_SERVER_ALO_PROYECTOS:-${WOLKVOX_SERVER:-0036}}"
+        WOLKVOX_TOKEN="${WOLKVOX_TOKEN_ALO_PROYECTOS:-${WOLKVOX_TOKEN:-CHANGE_ME}}"
+        TIMEZONE="${TIMEZONE_ALO_PROYECTOS:-${TIMEZONE_DEFAULT:-America/Bogota}}"
         ;;
     *)
         echo "Error: Operación '$WVX_OPERACION' no configurada"

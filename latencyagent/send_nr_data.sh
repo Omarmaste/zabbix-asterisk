@@ -1,18 +1,29 @@
 #!/usr/bin/env bash
 # Envía métricas de network_rejection por agente a Zabbix
 set -uo pipefail
-ZBX_SERVER="IP"
-ZBX_PORT="10051"
-ZBX_HOST="hostname"
-WOLKVOX_SERVER="0041"
-WOLKVOX_TOKEN="token"
+
+# Carga .env del proyecto si existe (retrocompatible: si no existe, usa los defaults)
+_ENV_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+[[ -f "${_ENV_ROOT}/.env" ]] && { set -a; source "${_ENV_ROOT}/.env"; set +a; }
+unset _ENV_ROOT
+
+ZBX_SERVER="${ZBX_SERVER:-68.183.116.34}"
+ZBX_PORT="${ZBX_PORT:-10051}"
+ZBX_HOST="${LATENCY_ZBX_HOST:-${ZBX_HOST:-ippbx-cloud-issa5-redplus}}"
+WOLKVOX_SERVER="${WOLKVOX_SERVER:-0041}"
+WOLKVOX_TOKEN="${WOLKVOX_TOKEN:-token}"
 API_URL="https://wv${WOLKVOX_SERVER}.wolkvox.com/api/v2/real_time.php?api=latency"
-STATE_FILE="/etc/zabbix/scripts/wvx_latency_agent/agent_nr_state.json"
-TMP_FILE="/etc/zabbix/scripts/wvx_latency_agent/agent_nr_batch.txt"
-CURL_OUTPUT="/etc/zabbix/scripts/wvx_latency_agent/agent_nr_curl.json"
+
+BASE_DIR="${LATENCY_BASE_DIR:-/etc/zabbix/scripts/wvx_latency_agent}"
+STATE_FILE="${BASE_DIR}/agent_nr_state.json"
+TMP_FILE="${BASE_DIR}/agent_nr_batch.txt"
+CURL_OUTPUT="${BASE_DIR}/agent_nr_curl.json"
 MAX_RETRIES=2
 RETRY_DELAY=3
 CURL_TIMEOUT=10
+
+mkdir -p "$BASE_DIR"
+
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Iniciando network_rejection monitor..."
 # 1) Consulta API
 for attempt in $(seq 1 $MAX_RETRIES); do

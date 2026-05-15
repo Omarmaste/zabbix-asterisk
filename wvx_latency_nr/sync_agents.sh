@@ -35,7 +35,13 @@ mkdir -p "$LOG_DIR"
   echo ">>> Exit code NR: $RC2"
 
   echo ""
-  echo "[$(date '+%Y-%m-%d %H:%M:%S')] FIN SYNC AGENTES (latency=$RC1 nr=$RC2)"
+  echo ">>> Regenerando paneles de Grafana..."
+  /usr/bin/python3 "${SCRIPTS_DIR}/bulk_grafana_agent_panels.py"
+  RC3=$?
+  echo ">>> Exit code Grafana: $RC3"
+
+  echo ""
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] FIN SYNC AGENTES (latency=$RC1 nr=$RC2 grafana=$RC3)"
 } >> "$LOG_FILE" 2>&1
 
 # Rotación simple: si log > 5MB, lo trunca dejando últimas 1000 líneas

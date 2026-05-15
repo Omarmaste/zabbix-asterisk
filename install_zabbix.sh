@@ -101,8 +101,10 @@ skip_step() {
 
 check_creds() {
     local warn=0
-    [[ "${ZBX_PASS:-CHANGE_ME}"      == "CHANGE_ME" ]] && { echo -e "  ${Y}⚠${N}  ZBX_PASS no configurado";      warn=1; }
-    [[ "${WOLKVOX_TOKEN:-CHANGE_ME}" == "CHANGE_ME" ]] && { echo -e "  ${Y}⚠${N}  WOLKVOX_TOKEN no configurado"; warn=1; }
+    [[ "${ZBX_PASS:-CHANGE_ME}"             == "CHANGE_ME" ]] && { echo -e "  ${Y}⚠${N}  ZBX_PASS no configurado";             warn=1; }
+    [[ "${WOLKVOX_TOKEN:-CHANGE_ME}"        == "CHANGE_ME" ]] && { echo -e "  ${Y}⚠${N}  WOLKVOX_TOKEN no configurado";        warn=1; }
+    [[ "${GRAFANA_DASHBOARD_UID:-CHANGE_ME}" == "CHANGE_ME" ]] && { echo -e "  ${Y}⚠${N}  GRAFANA_DASHBOARD_UID no configurado"; warn=1; }
+    [[ "${GRAFANA_DS_UID:-CHANGE_ME}"        == "CHANGE_ME" ]] && { echo -e "  ${Y}⚠${N}  GRAFANA_DS_UID no configurado";        warn=1; }
     [[ $warn -eq 1 ]] && echo ""
 }
 
@@ -146,6 +148,39 @@ else
     run "Items fail2ban" \
         env ZBX_HOST="${ZBX_HOST_FAIL2BAN:-${ZBX_HOST:-Zabbix server}}" \
         python3 "${SCRIPT_DIR}/ast_fail2ban/asterisk.fail2ban.bulk.py"
+
+    # ─── Cron /etc/crontab ──────────────────────────────────────
+    # Detecta estado Fail2ban c/5 min, las 24 h.
+    # Elimina ruta vieja (/etc/zabbix/scripts/asterisk.fail2ban)
+    # si aún existe, para que no queden dos entradas activas.
+    _CRON_MARKER="AUTO:ast_fail2ban"
+    _F2B_SCRIPT="${SCRIPT_DIR}/ast_fail2ban/asterisk.fail2ban"
+    printf "  %-54s" "Cron fail2ban en /etc/crontab"
+    # Limpia entrada vieja con ruta anterior (si existiera)
+    sed -i '\|/etc/zabbix/scripts/asterisk\.fail2ban|d' /etc/crontab 2>/dev/null || true
+    if grep -q "${_CRON_MARKER}" /etc/crontab 2>/dev/null; then
+        echo -e "[${Y}SKIP${N}] ya configurado"
+        ((SKIP_COUNT++))
+    else
+        cat >> /etc/crontab <<CRONEOF
+
+#--- ${_CRON_MARKER} ----------------------------------------
+# Detecta estado de Fail2ban de Asterisk y envia alerta a Zabbix.
+# Intervalo: cada 5 min, las 24 horas.
+#------------------------------------------------------------
+*/5 * * * * root /bin/bash ${_F2B_SCRIPT} >/dev/null 2>&1
+#--- END ${_CRON_MARKER} ------------------------------------
+CRONEOF
+        if [[ $? -eq 0 ]]; then
+            echo -e "[${G}OK${N}]"
+            echo "      Cada 5 min, 24 h | ${_F2B_SCRIPT}"
+            ((PASS++))
+        else
+            echo -e "[${R}FAIL${N}]"
+            ((FAIL_COUNT++))
+            FAIL_MSGS+=("Cron fail2ban en /etc/crontab")
+        fi
+    fi
 fi
 
 # ═══════════════════════════════════════════════════════════════
@@ -216,6 +251,46 @@ else
         python3 "${SCRIPT_DIR}/wvx_latency_nr/create_latency_items.py"
     run "Items network rejection en Zabbix" \
         python3 "${SCRIPT_DIR}/wvx_latency_nr/create_nr_items.py"
+    run "Paneles de agentes en Grafana" \
+        python3 "${SCRIPT_DIR}/wvx_latency_nr/bulk_grafana_agent_panels.py"
+
+    # ─── Cron /etc/crontab ──────────────────────────────────────
+    # Ventana 07:00-21:00: horario operativo del contact center.
+    # send_latency c/10 min | send_nr c/11 min — desfase de 1 min
+    #   para que ambos pollers no colisionen en la API de Wolkvox.
+    # sync_agents 01:00 AM — registra agentes nuevos en Zabbix y
+    #   regenera todos los paneles de Grafana automáticamente.
+    _CRON_MARKER="AUTO:wvx_latency_nr"
+    _WVX_SCRIPTS="${SCRIPT_DIR}/wvx_latency_nr"
+    printf "  %-54s" "Cron entries en /etc/crontab"
+    if grep -q "${_CRON_MARKER}" /etc/crontab 2>/dev/null; then
+        echo -e "[${Y}SKIP${N}] ya configurado"
+        ((SKIP_COUNT++))
+    else
+        cat >> /etc/crontab <<CRONEOF
+
+#--- ${_CRON_MARKER} ----------------------------------------
+# Ventana operativa 07:00-21:00 (hora local del servidor).
+# send_latency : cada 10 min | send_nr : cada 11 min
+#   Desfase de 1 min evita que ambos pollers colisionen en la API.
+# sync_agents (01:00 AM) : registra agentes nuevos en Zabbix
+#   y regenera los paneles de Grafana automaticamente.
+#------------------------------------------------------------
+*/10 7-21 * * * root /bin/bash ${_WVX_SCRIPTS}/send_latency_data.sh >/dev/null 2>&1
+*/11 7-21 * * * root /bin/bash ${_WVX_SCRIPTS}/send_nr_data.sh >/dev/null 2>&1
+0 1 * * * root /bin/bash ${_WVX_SCRIPTS}/sync_agents.sh >/dev/null 2>&1
+#--- END ${_CRON_MARKER} ------------------------------------
+CRONEOF
+        if [[ $? -eq 0 ]]; then
+            echo -e "[${G}OK${N}]"
+            echo "      Ventana 07:00-21:00 | latencia c/10 min | NR c/11 min | sync 01:00 AM"
+            ((PASS++))
+        else
+            echo -e "[${R}FAIL${N}]"
+            ((FAIL_COUNT++))
+            FAIL_MSGS+=("Cron entries en /etc/crontab")
+        fi
+    fi
 fi
 
 # ═══════════════════════════════════════════════════════════════

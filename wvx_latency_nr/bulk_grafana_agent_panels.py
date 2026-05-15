@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-v2 - Cambios respecto a v1:
-  - LAT_H = 2 (antes 1) para que el numero se renderice
-  - NR sin unidad "%" porque son contadores, no porcentajes
-  - MARKER bumped a v2 para reemplazo limpio de los paneles v1
+v3 - Cambios respecto a v2:
+  - Agrega paneles globales tipo timeseries: Latencia Global + Network Rejection
+  - Fix regex key lookup usando WOLKVOX_OPERATION como prefijo
+  - START_Y = 18 para dejar espacio a los dos paneles globales (9px c/u)
+  - GLOBAL_MARKER para limpiar/regenerar paneles globales independientemente
 """
 import argparse
 import json
@@ -37,6 +38,7 @@ ZBX_URL   = os.environ.get("ZBX_URL",        "http://68.183.116.34/zabbix/api_js
 ZBX_USER  = os.environ.get("ZBX_USER",       "Admin")
 ZBX_PASS  = os.environ.get("ZBX_PASS",       "CHANGE_ME")
 HOST_NAME = os.environ.get("LATENCY_ZBX_HOST", os.environ.get("ZBX_HOST", "ippbx-cloud-issa5-redplus"))
+WOLKVOX_OPERATION = os.environ.get("WOLKVOX_OPERATION", "unknown_operation")
 
 # Grafana
 GRAFANA_URL    = os.environ.get("GRAFANA_URL",           "http://68.183.116.34:3000")
@@ -51,13 +53,16 @@ GRAFANA_PASS   = os.environ.get("GRAFANA_PASS",  "CHANGE_ME")
 # Layout
 PANELS_PER_ROW = 8
 PANEL_W = 3
-NR_H    = 3   # grande
-LAT_H   = 2   # CAMBIADO: antes 1 (no renderizaba el numero)
-START_Y = 10
+NR_H    = 3   # alto panel NR individual
+LAT_H   = 2   # alto panel latencia individual
+GLOBAL_H = 9  # alto paneles globales (timeseries)
+START_Y = 18  # y inicial por-agente (2 x GLOBAL_H para los paneles globales)
 
-# Marker - bump a v2 para que reemplace los v1 limpiamente
-MARKER  = "auto:wvx_agent_v2"
-OLD_MARKERS = ["auto:wvx_agent_v1", "auto:wvx_agent_v2"]  # ambos se limpian
+# Markers — identifican paneles autogenerados para reemplazarlos limpiamente
+MARKER        = "auto:wvx_agent_v2"
+GLOBAL_MARKER = "auto:wvx_global_v1"
+OLD_MARKERS   = ["auto:wvx_agent_v1", "auto:wvx_agent_v2"]  # per-agente
+ALL_AUTO_MARKERS = OLD_MARKERS + [GLOBAL_MARKER]            # todos
 
 # Umbrales NR (contador de rechazos, NO porcentaje)
 NR_THRESHOLDS = [
@@ -103,8 +108,8 @@ def zbx_get_agent_items(auth, hostid):
     agents = {}
     for it in items:
         key = it["key_"]
-        m_lat = re.match(r"^agent\.latency\[(\d+)\]$", key)
-        m_nr  = re.match(r"^redplus\.agent\.nr\[(\d+)\]$", key)
+        m_lat = re.match(rf"^{re.escape(WOLKVOX_OPERATION)}\.agent\.latency\[(\d+)\]$", key)
+        m_nr  = re.match(rf"^{re.escape(WOLKVOX_OPERATION)}\.agent\.nr\[(\d+)\]$", key)
         if m_lat:
             code = m_lat.group(1)
             agents.setdefault(code, {})["latency_itemid"] = it["itemid"]
@@ -170,6 +175,150 @@ def make_target(itemid, ref_id="A"):
         },
         "table": {"skipEmptyValues": False},
         "schema": 12
+    }
+
+def make_global_target(ref_id, item_filter):
+    return {
+        "refId": ref_id,
+        "datasource": {"type": "alexanderzobnin-zabbix-datasource", "uid": GRAFANA_DS_UID},
+        "queryType": "0",
+        "group":       {"filter": "ALL"},
+        "host":        {"filter": HOST_NAME},
+        "application": {"filter": ""},
+        "item":        {"filter": item_filter},
+        "itemTag":     {"filter": ""},
+        "itemids":     "",
+        "macro":       {"filter": ""},
+        "proxy":       {"filter": ""},
+        "tags":        {"filter": ""},
+        "trigger":     {"filter": ""},
+        "textFilter":  "",
+        "countTriggersBy": "",
+        "evaltype": "0",
+        "functions": [],
+        "options": {
+            "count": False,
+            "disableDataAlignment": False,
+            "showDisabledItems": False,
+            "skipEmptyValues": False,
+            "useTrends": "default",
+            "useZabbixValueMapping": False
+        },
+        "table": {"skipEmptyValues": False},
+        "schema": 12,
+        "resultFormat": "time_series"
+    }
+
+def make_latency_global_panel(panel_id):
+    desc = (
+        f"{GLOBAL_MARKER}\n"
+        "Latencia de agentes (estándar ITU-T G.114):\n"
+        "- 0-150ms: Excelente\n"
+        "- 150-400ms: Aceptable\n"
+        "- 400-500ms: Límite tolerable\n"
+        "- Mayor a 500ms: Inaceptable - afecta calidad de llamadas"
+    )
+    return {
+        "id": panel_id,
+        "type": "timeseries",
+        "title": "Latencia Global Agentes",
+        "description": desc,
+        "datasource": {"type": "alexanderzobnin-zabbix-datasource", "uid": GRAFANA_DS_UID},
+        "gridPos": {"x": 0, "y": 0, "w": 24, "h": GLOBAL_H},
+        "targets": [make_global_target("A", "/Agent .* - .* - Latency/")],
+        "options": {
+            "tooltip": {"mode": "single", "sort": "none", "hideZeros": False},
+            "legend": {
+                "showLegend": True,
+                "displayMode": "table",
+                "placement": "right",
+                "calcs": ["max"]
+            }
+        },
+        "fieldConfig": {
+            "defaults": {
+                "unit": "ms",
+                "decimals": 0,
+                "color": {"mode": "palette-classic"},
+                "custom": {
+                    "drawStyle": "line",
+                    "lineInterpolation": "linear",
+                    "lineWidth": 1,
+                    "fillOpacity": 0,
+                    "gradientMode": "none",
+                    "spanNulls": False,
+                    "showPoints": "auto",
+                    "pointSize": 5,
+                    "stacking": {"mode": "none", "group": "A"},
+                    "axisPlacement": "auto",
+                    "axisLabel": "",
+                    "axisColorMode": "text",
+                    "axisBorderShow": True,
+                    "scaleDistribution": {"type": "linear"},
+                    "axisCenteredZero": False,
+                    "hideFrom": {"tooltip": False, "viz": False, "legend": False},
+                    "thresholdsStyle": {"mode": "line+area"}
+                },
+                "thresholds": {
+                    "mode": "absolute",
+                    "steps": LAT_THRESHOLDS
+                },
+                "mappings": []
+            },
+            "overrides": []
+        }
+    }
+
+def make_nr_global_panel(panel_id):
+    return {
+        "id": panel_id,
+        "type": "timeseries",
+        "title": "Network Rejection Global Agentes",
+        "description": GLOBAL_MARKER,
+        "datasource": {"type": "alexanderzobnin-zabbix-datasource", "uid": GRAFANA_DS_UID},
+        "gridPos": {"x": 0, "y": GLOBAL_H, "w": 24, "h": GLOBAL_H},
+        "targets": [make_global_target("A", "/Agent .* - .* - NR/")],
+        "options": {
+            "tooltip": {"mode": "single", "sort": "none", "hideZeros": False},
+            "legend": {
+                "showLegend": True,
+                "displayMode": "list",
+                "placement": "right",
+                "calcs": []
+            }
+        },
+        "fieldConfig": {
+            "defaults": {
+                "unit": "short",
+                "decimals": 0,
+                "color": {"mode": "palette-classic"},
+                "custom": {
+                    "drawStyle": "line",
+                    "lineInterpolation": "linear",
+                    "lineWidth": 1,
+                    "fillOpacity": 0,
+                    "gradientMode": "none",
+                    "spanNulls": False,
+                    "showPoints": "auto",
+                    "pointSize": 5,
+                    "stacking": {"mode": "none", "group": "A"},
+                    "axisPlacement": "auto",
+                    "axisLabel": "",
+                    "axisColorMode": "text",
+                    "axisBorderShow": False,
+                    "scaleDistribution": {"type": "linear"},
+                    "axisCenteredZero": False,
+                    "hideFrom": {"tooltip": False, "viz": False, "legend": False},
+                    "thresholdsStyle": {"mode": "line+area"}
+                },
+                "thresholds": {
+                    "mode": "absolute",
+                    "steps": NR_THRESHOLDS
+                },
+                "mappings": []
+            },
+            "overrides": []
+        }
     }
 
 def make_nr_panel(panel_id, code, name, itemid, x, y):
@@ -256,8 +405,15 @@ def main():
                 if "latency_itemid" in d and "nr_itemid" in d}
     print(f"      Agentes completos: {len(complete)}")
 
-    print(f"[3/5] Generando {len(complete) * 2} paneles...")
-    new_panels = []
+    agent_count = len(complete)
+    print(f"[3/5] Generando paneles (2 globales + {agent_count * 2} por agente)...")
+    # Paneles globales (timeseries)
+    global_panels = [
+        make_latency_global_panel(900),
+        make_nr_global_panel(901),
+    ]
+    # Paneles por agente (stat)
+    agent_panels = []
     next_id = 1000
     for idx, code in enumerate(sorted(complete.keys(), key=int)):
         data = complete[code]
@@ -266,26 +422,29 @@ def main():
         row = idx // PANELS_PER_ROW
         x = col * PANEL_W
         y = START_Y + row * (NR_H + LAT_H)
-        new_panels.append(make_nr_panel(next_id,     code, name, data["nr_itemid"],      x, y))
-        new_panels.append(make_lat_panel(next_id + 1, code,       data["latency_itemid"], x, y + NR_H))
+        agent_panels.append(make_nr_panel(next_id,     code, name, data["nr_itemid"],      x, y))
+        agent_panels.append(make_lat_panel(next_id + 1, code,       data["latency_itemid"], x, y + NR_H))
         next_id += 2
 
+    new_panels = global_panels + agent_panels
+
     if args.dry_run:
-        print(f"\n[DRY-RUN] Total paneles: {len(new_panels)}")
+        print(f"\n[DRY-RUN] Total paneles: {len(new_panels)} (2 globales + {len(agent_panels)} por agente)")
         return
 
     print("[4/5] Cargando dashboard...")
     dash_resp = grafana_get_dashboard(DASHBOARD_UID)
     dashboard = dash_resp["dashboard"]
     existing = dashboard.get("panels", [])
-    # Limpia v1 Y v2 (por si re-corres)
-    kept = [p for p in existing if p.get("description") not in OLD_MARKERS]
+    # Limpia todos los paneles autogenerados (globales y por-agente)
+    kept = [p for p in existing
+            if not any(m in (p.get("description") or "") for m in ALL_AUTO_MARKERS)]
     removed = len(existing) - len(kept)
     print(f"      Existentes: {len(existing)} | Conservados: {len(kept)} | Removidos auto: {removed}")
 
     dashboard["panels"] = kept + new_panels
     print(f"[5/5] Guardando ({len(dashboard['panels'])} paneles totales)...")
-    res = grafana_save_dashboard(dashboard, message=f"v2: {len(complete)} agent panels")
+    res = grafana_save_dashboard(dashboard, message=f"v3: 2 globales + {agent_count} agentes")
     print(f"      OK ✓ version={res.get('version')}")
 
 if __name__ == "__main__":

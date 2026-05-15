@@ -22,3 +22,8 @@ zabbix_agentd.conf.bak.*
 __pycache__/
 *.pyc
 *.pyo
+
+# Swap files de editores (vim, nano)
+*.swp
+*.swo
+*~

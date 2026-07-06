@@ -306,8 +306,12 @@ Ejemplo con envío **cada 30 minutos** (configuración usada en NueveOnce):
 Sincronización diaria de agentes nuevos (items Zabbix + paneles Grafana):
 
 ```cron
-0 1 * * * /bin/bash /etc/zabbix/scripts/wvx_latency_agent/sync_agents.sh
+0 1 * * * /bin/bash /etc/zabbix/scripts/wvx_latency_agent/wvx_latency_nr/sync_agents.sh
 ```
+
+> ⚠️ **Ruta correcta — importante:** los **seis** scripts de este módulo (`send_latency_data.sh`, `send_nr_data.sh`, `create_latency_items.py`, `create_nr_items.py`, `bulk_grafana_agent_panels.py` y `sync_agents.sh`) viven **dentro de la subcarpeta `wvx_latency_nr/`**, no en la raíz del clone (`wvx_latency_agent/`). El `git clone` trae el repo completo con otros módulos (`ast_pjsip`, `ast_sip`, `ast_fail2ban`, `wvx_auditlog`, etc.) en la raíz — es fácil, al armar el cron, olvidar el segundo tramo de la ruta y apuntar a `wvx_latency_agent/sync_agents.sh` en vez de `wvx_latency_agent/wvx_latency_nr/sync_agents.sh`. Esa tarea fallaría silenciosamente (cron no avisa si el archivo no existe, solo no hace nada). Siempre verifica con `ls -l` la ruta exacta antes de darla por buena en el crontab.
+>
+> El único archivo que **sí** vive en la raíz del clone (un nivel arriba de `wvx_latency_nr/`) es el **`.env`**, ya que los scripts están programados para buscarlo subiendo un nivel desde su propia ubicación.
 
 Verifica:
 
@@ -482,7 +486,14 @@ Resumen de particularidades encontradas durante la puesta en producción en el s
 3. El repo se clonó completo en `/etc/zabbix/scripts/wvx_latency_agent/`; los scripts de este módulo están en la subcarpeta `wvx_latency_nr/`, pero el `.env` vive un nivel arriba, en la raíz del proyecto.
 4. La frecuencia del poller se configuró en **cada 30 minutos** (no cada minuto) según requerimiento del cliente.
 5. Se presentó el caso de "No data" en el panel global de Network Rejection descrito en la sección de Troubleshooting — causado por el **Cache TTL** del datasource de Zabbix en Grafana, no por falta de datos ni error de configuración de los items.
-6. UIDs reales usados en esta instalación (como referencia de formato, no reutilizar):
+6. **Cron final usado, vía `/etc/crontab`** (no `crontab -e`, para evitar duplicar tareas entre ambos mecanismos). Nota que `/etc/crontab` exige un campo adicional de usuario (`root`) entre los campos de tiempo y el comando:
+   ```cron
+   */30 * * * * root /etc/zabbix/scripts/wvx_latency_agent/wvx_latency_nr/send_latency_data.sh >> /var/log/zabbix/latency_agent.log 2>&1
+   */30 * * * * root /etc/zabbix/scripts/wvx_latency_agent/wvx_latency_nr/send_nr_data.sh >> /var/log/zabbix/nr_agent.log 2>&1
+   0 1 * * * root /etc/zabbix/scripts/wvx_latency_agent/wvx_latency_nr/sync_agents.sh >> /var/log/zabbix/sync_agents.log 2>&1
+   ```
+   Se detectó y corrigió un error inicial donde la línea de `sync_agents.sh` apuntaba a `wvx_latency_agent/sync_agents.sh` (sin el segundo tramo `wvx_latency_nr/`) — el archivo no existe ahí, así que la tarea habría fallado silenciosamente cada noche a la 1:00 AM sin ninguna alerta visible.
+7. UIDs reales usados en esta instalación (como referencia de formato, no reutilizar):
    - `GRAFANA_DASHBOARD_UID`: se obtiene de la URL `/d/{UID}/...` (no de `/dashboards/f/{folder_uid}/...`, que es la carpeta)
    - `GRAFANA_DS_UID`: se obtiene de `/connections/datasources/edit/{UID}`
 

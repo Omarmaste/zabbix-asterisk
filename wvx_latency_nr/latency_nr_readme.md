@@ -573,4 +573,3 @@ Resumen de particularidades encontradas durante la puesta en producción en el s
 ---
 
 **Autor:** Equipo de monitoreo
-**Versión:** 2.2 (incluye incidente de /var/log/zabbix faltante y bug de estado fantasma — NueveOnce)

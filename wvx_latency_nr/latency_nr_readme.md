@@ -377,6 +377,37 @@ python3 create_latency_items.py
 python3 create_nr_items.py
 ```
 
+### Ningún archivo de log se genera y los datos dejaron de actualizarse de un día para otro
+
+**Caso real observado:** el cron llevaba configurado y "funcionando" un día completo (confirmado con `crontab -l` y con el `grep CRON /var/log/syslog` mostrando que las 3 tareas SÍ se ejecutaban cada 30 min / cada 24h), pero:
+```bash
+cat /var/log/zabbix/latency_agent.log
+# cat: /var/log/zabbix/latency_agent.log: No such file or directory
+```
+Ni el log de latencia, ni el de NR, ni el de sync existían — y los datos en Grafana llevaban ~22 horas sin actualizarse.
+
+**Causa:** la carpeta **`/var/log/zabbix/` no existía** en el servidor. El paso de creación de esta carpeta (`mkdir -p /var/log/zabbix`) está documentado en la sección de Instalación de este mismo readme, pero es fácil saltárselo si se instalan los permisos de los `.sh` sin ejecutar también esa línea. Sin la carpeta destino, la redirección `>> /var/log/zabbix/....log 2>&1` del crontab falla, y **el script nunca llega a ejecutarse** — cron no reporta ningún error visible por esto, simplemente no pasa nada.
+
+**Cómo confirmarlo:**
+```bash
+ls -ld /var/log/zabbix
+# ls: cannot access '/var/log/zabbix': No such file or directory   <- confirma el problema
+```
+
+**Solución:**
+```bash
+mkdir -p /var/log/zabbix
+chown zabbix:zabbix /var/log/zabbix
+
+# Luego corre los scripts manualmente para ponerte al día de inmediato,
+# no esperes al próximo ciclo de cron:
+cd /etc/zabbix/scripts/wvx_latency_agent/wvx_latency_nr
+bash send_latency_data.sh
+bash send_nr_data.sh
+```
+
+> **Efecto colateral importante:** si `sync_agents.sh` también estuvo fallando por esta misma razón (por ejemplo, durante varias noches seguidas), los agentes nuevos que Wolkvox haya agregado en ese período **nunca se dieron de alta en Zabbix ni en Grafana**. Después de crear la carpeta, corre manualmente `create_latency_items.py`, `create_nr_items.py` y `bulk_grafana_agent_panels.py` una vez para ponerte al día, en vez de esperar a la próxima ejecución automática de la 1:00 AM.
+
 ### Un panel global de Grafana muestra "No data" aunque los paneles individuales sí tienen datos
 
 **Caso real observado:** el panel "Latencia Global Agentes" (filtro `/Agent .* - .* - Latency/`) mostraba datos correctamente, pero "Network Rejection Global Agentes" (filtro `/Agent .* - .* - NR/`) mostraba **"No data"** — a pesar de que:
@@ -402,8 +433,10 @@ python3 create_nr_items.py
 Esos agentes están en Zabbix pero todavía no han recibido el primer valor de `zabbix_sender`. Para forzarlo:
 
 ```bash
+cd /etc/zabbix/scripts/wvx_latency_agent/wvx_latency_nr
+
 # Borra los state files (solo una vez)
-rm -f /etc/zabbix/scripts/wvx_latency_agent/agent_*_state.json
+rm -f agent_*_state.json
 
 # Re-ejecuta para enviar TODOS los valores actuales
 bash send_latency_data.sh
@@ -442,9 +475,31 @@ Así una sola ejecución limpia todos los autogenerados de cualquier versión pr
 ### Ver agentes actuales en el state
 
 ```bash
-cat /etc/zabbix/scripts/wvx_latency_agent/agent_nr_state.json | jq 'length'
-cat /etc/zabbix/scripts/wvx_latency_agent/agent_latency_state.json | jq 'length'
+cat /etc/zabbix/scripts/wvx_latency_agent/wvx_latency_nr/agent_nr_state.json | jq 'length'
+cat /etc/zabbix/scripts/wvx_latency_agent/wvx_latency_nr/agent_latency_state.json | jq 'length'
 ```
+
+> ⚠️ Al igual que el resto de los scripts del módulo, **los archivos de estado (`agent_nr_state.json`, `agent_latency_state.json`) viven dentro de `wvx_latency_nr/`**, no en la raíz del proyecto.
+
+### El panel de NR (o latencia) queda vacío por horas aunque `zabbix_sender` parezca estar corriendo bien en los ciclos siguientes
+
+**Caso real observado:** un ciclo del poller falló con `[ERR] Fallo` (zabbix_sender no pudo entregar el batch — en este caso porque `/var/log/zabbix/` no existía y el log no se pudo escribir, cortando la ejecución del script a medias). Los ciclos **siguientes** del mismo poller mostraron:
+```
+[INFO] Total: 66 agentes | Cambios: 0
+[INFO] Sin cambios
+```
+y terminaron sin error — pero el panel en Grafana seguía en blanco.
+
+**Causa:** el script guarda el "último valor enviado" en el archivo de estado (`agent_nr_state.json` / `agent_latency_state.json`) **antes de confirmar que `zabbix_sender` entregó el dato con éxito**, o lo guarda igual aunque el envío haya fallado. En el siguiente ciclo, como el valor actual de Wolkvox es igual al que quedó guardado en el estado, el script concluye que "no hay cambios" y **no vuelve a intentar el envío** — aunque Zabbix nunca haya recibido ese dato la primera vez. El resultado es un dato "fantasma": existe en el estado local, pero nunca llegó a Zabbix, y el poller ya no lo va a reintentar por sí solo hasta que el valor real cambie de nuevo.
+
+**Solución — forzar un reenvío completo borrando el state file afectado:**
+```bash
+cd /etc/zabbix/scripts/wvx_latency_agent/wvx_latency_nr
+rm agent_nr_state.json        # o agent_latency_state.json, según cuál se vio afectado
+bash send_nr_data.sh          # reenvía TODOS los valores actuales, sin comparar contra estado previo
+```
+
+**Cómo detectarlo a futuro:** cualquier vez que un ciclo del poller termine en `[ERR] Fallo` (por la razón que sea — Zabbix caído, red, disco lleno, permisos de log, etc.), asume que **ese batch específico se perdió** y que los ciclos siguientes probablemente digan "Sin cambios" sin reintentarlo. Revisa el log inmediatamente después de cualquier `[ERR] Fallo` y, si es necesario, borra el state file correspondiente para forzar el reenvío completo.
 
 ---
 
@@ -496,6 +551,12 @@ Resumen de particularidades encontradas durante la puesta en producción en el s
 7. UIDs reales usados en esta instalación (como referencia de formato, no reutilizar):
    - `GRAFANA_DASHBOARD_UID`: se obtiene de la URL `/d/{UID}/...` (no de `/dashboards/f/{folder_uid}/...`, que es la carpeta)
    - `GRAFANA_DS_UID`: se obtiene de `/connections/datasources/edit/{UID}`
+8. **Incidente del día siguiente (2026-07-06):** el monitoreo dejó de actualizarse por ~22 horas. Causa raíz: `/var/log/zabbix/` nunca se creó en el servidor (paso documentado en Instalación pero omitido en la práctica), lo que hizo que los 3 cron jobs fallaran silenciosamente desde el primer ciclo — incluyendo `sync_agents.sh`, que debía correr cada noche a la 1:00 AM. Como consecuencia:
+   - Ningún archivo de log se generó en absoluto (ni siquiera con el error), lo cual fue la pista clave del diagnóstico.
+   - Al no correr `sync_agents.sh`, los agentes nuevos que Wolkvox fue agregando durante ese período (36 agentes: de 48 a 66) nunca se dieron de alta en Zabbix ni en Grafana.
+   - Se corrigió creando la carpeta faltante y ejecutando manualmente `create_latency_items.py`, `create_nr_items.py` y `bulk_grafana_agent_panels.py` para ponerse al día sin esperar al próximo ciclo automático.
+9. **Bug de estado "fantasma" detectado el mismo día:** un ciclo de `send_nr_data.sh` terminó en `[ERR] Fallo` (por la misma causa del punto 8). Los ciclos siguientes reportaron `Cambios: 0 / Sin cambios` y no volvieron a intentar el envío, aunque el dato nunca había llegado a Zabbix — ver detalle y solución en la sección de Troubleshooting ("El panel de NR... queda vacío por horas"). Se resolvió borrando `agent_nr_state.json` para forzar un reenvío completo de los 66 valores.
+10. **Pendiente de limpieza:** `bulk_grafana_agent_panels.py` reportó `Agentes completos: 84` cuando Wolkvox solo tiene 66 agentes activos. Hay ~18 items de agentes inactivos/dados de baja en Zabbix que siguen generando paneles con "No data" en Grafana. No rompe nada, pero conviene planear una limpieza periódica de items huérfanos (agentes que ya no aparecen en la API de Wolkvox desde hace X días).
 
 ---
 
@@ -512,4 +573,4 @@ Resumen de particularidades encontradas durante la puesta en producción en el s
 ---
 
 **Autor:** Equipo de monitoreo
-**Versión:** 2.1 (incluye notas de instalación real — NueveOnce)
+**Versión:** 2.2 (incluye incidente de /var/log/zabbix faltante y bug de estado fantasma — NueveOnce)

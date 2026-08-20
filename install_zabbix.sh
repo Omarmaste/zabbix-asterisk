@@ -82,8 +82,8 @@ run() {
     local tmp; tmp=$(mktemp)
     if "$@" > "$tmp" 2>&1; then
         echo -e "[${G}OK${N}]"
-        grep -E '(Total|Resumen|creados|OK|Nuevos|completado|Proceso)' "$tmp" 2>/dev/null \
-            | tail -2 | sed 's/^/      /'
+        grep -E '(Total|Resumen|creados|OK|Nuevos|completado|Proceso|Tablero|Carpeta|guardado|URL:)' "$tmp" 2>/dev/null \
+            | tail -4 | sed 's/^/      /'
         rm -f "$tmp"; ((PASS++))
     else
         local rc=$?
@@ -103,7 +103,7 @@ check_creds() {
     local warn=0
     [[ "${ZBX_PASS:-CHANGE_ME}"             == "CHANGE_ME" ]] && { echo -e "  ${Y}⚠${N}  ZBX_PASS no configurado";             warn=1; }
     [[ "${WOLKVOX_TOKEN:-CHANGE_ME}"        == "CHANGE_ME" ]] && { echo -e "  ${Y}⚠${N}  WOLKVOX_TOKEN no configurado";        warn=1; }
-    [[ "${GRAFANA_DASHBOARD_UID:-CHANGE_ME}" == "CHANGE_ME" ]] && { echo -e "  ${Y}⚠${N}  GRAFANA_DASHBOARD_UID no configurado"; warn=1; }
+    [[ "${GRAFANA_DASHBOARD_UID:-CHANGE_ME}" == "CHANGE_ME" ]] && { echo -e "  ${Y}i${N}  GRAFANA_DASHBOARD_UID vacio — se creara el tablero automaticamente"; }
     [[ "${GRAFANA_DS_UID:-CHANGE_ME}"        == "CHANGE_ME" ]] && { echo -e "  ${Y}⚠${N}  GRAFANA_DS_UID no configurado";        warn=1; }
     [[ $warn -eq 1 ]] && echo ""
 }
@@ -251,15 +251,23 @@ else
         python3 "${SCRIPT_DIR}/wvx_latency_nr/create_latency_items.py"
     run "Items network rejection en Zabbix" \
         python3 "${SCRIPT_DIR}/wvx_latency_nr/create_nr_items.py"
-    run "Paneles de agentes en Grafana" \
+    run "Items estado/plataforma/conexion/version en Zabbix" \
+        python3 "${SCRIPT_DIR}/wvx_latency_nr/create_status_items.py"
+    run "Primer envio de estado/plataforma/conexion/version" \
+        bash "${SCRIPT_DIR}/wvx_latency_nr/send_status_data.sh"
+    # Si GRAFANA_DASHBOARD_UID esta vacio/CHANGE_ME (cliente nuevo), este paso
+    # crea el tablero + carpeta en Grafana automaticamente (mismo formato que
+    # "wvx - npls - Latencia Agentes") y guarda el UID nuevo en el .env.
+    run "Paneles de agentes en Grafana (NR+Latencia+Estado+Plataforma+Conexion+Version)" \
         python3 "${SCRIPT_DIR}/wvx_latency_nr/bulk_grafana_agent_panels.py"
 
     # ─── Cron /etc/crontab ──────────────────────────────────────
     # Ventana 07:00-21:00: horario operativo del contact center.
-    # send_latency c/10 min | send_nr c/11 min — desfase de 1 min
-    #   para que ambos pollers no colisionen en la API de Wolkvox.
-    # sync_agents 01:00 AM — registra agentes nuevos en Zabbix y
-    #   regenera todos los paneles de Grafana automáticamente.
+    # send_latency c/10 min | send_nr c/11 min | send_status c/12 min —
+    #   desfases distintos para que los pollers no colisionen en la API.
+    # sync_agents 01:00 AM — registra agentes nuevos (latencia/NR/estado)
+    #   en Zabbix y regenera todos los paneles de Grafana automáticamente,
+    #   incluyendo el umbral de "version desactualizada" (30 dias).
     _CRON_MARKER="AUTO:wvx_latency_nr"
     _WVX_SCRIPTS="${SCRIPT_DIR}/wvx_latency_nr"
     printf "  %-54s" "Cron entries en /etc/crontab"
@@ -271,19 +279,20 @@ else
 
 #--- ${_CRON_MARKER} ----------------------------------------
 # Ventana operativa 07:00-21:00 (hora local del servidor).
-# send_latency : cada 10 min | send_nr : cada 11 min
-#   Desfase de 1 min evita que ambos pollers colisionen en la API.
+# send_latency : cada 10 min | send_nr : cada 11 min | send_status : cada 12 min
+#   Desfases distintos evitan que los pollers colisionen en la API.
 # sync_agents (01:00 AM) : registra agentes nuevos en Zabbix
 #   y regenera los paneles de Grafana automaticamente.
 #------------------------------------------------------------
 */10 7-21 * * * root /bin/bash ${_WVX_SCRIPTS}/send_latency_data.sh >/dev/null 2>&1
 */11 7-21 * * * root /bin/bash ${_WVX_SCRIPTS}/send_nr_data.sh >/dev/null 2>&1
+*/12 7-21 * * * root /bin/bash ${_WVX_SCRIPTS}/send_status_data.sh >/dev/null 2>&1
 0 1 * * * root /bin/bash ${_WVX_SCRIPTS}/sync_agents.sh >/dev/null 2>&1
 #--- END ${_CRON_MARKER} ------------------------------------
 CRONEOF
         if [[ $? -eq 0 ]]; then
             echo -e "[${G}OK${N}]"
-            echo "      Ventana 07:00-21:00 | latencia c/10 min | NR c/11 min | sync 01:00 AM"
+            echo "      Ventana 07:00-21:00 | latencia c/10 min | NR c/11 min | estado c/12 min | sync 01:00 AM"
             ((PASS++))
         else
             echo -e "[${R}FAIL${N}]"

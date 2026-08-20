@@ -75,7 +75,8 @@ Sistema de monitoreo automatizado para agentes Wolkvox. Recolecta métricas de l
 | `send_nr_data.sh` | Poller: consulta Wolkvox API, envía NR a Zabbix |
 | `sync_agents.sh` | Orquestador diario: encadena los 3 scripts de sincronización |
 | `bulk_grafana_agent_panels.py` | Regenera paneles del dashboard de Grafana (idempotente) |
-| `.env` (raíz del proyecto, un nivel arriba de `wvx_latency_nr/`) | Variables de entorno reales del cliente (host Zabbix, token Wolkvox, UIDs de Grafana, etc.) |
+| `.env` (raíz del proyecto, un nivel arriba de `wvx_latency_nr/`) | Variables de entorno reales del cliente (host Zabbix, token Wolkvox, UIDs de Grafana, etc.) — no se commitea |
+| `.env.example` (raíz del proyecto) | Plantilla para dar de alta un cliente nuevo: `cp .env.example .env` y completar |
 
 > Los scripts cargan automáticamente el `.env` ubicado en la **raíz del proyecto** (`/etc/zabbix/scripts/wvx_latency_agent/.env`), no dentro de la subcarpeta `wvx_latency_nr/`. Si no existe, caen a los valores por defecto/placeholder definidos en cada script.
 
@@ -190,21 +191,28 @@ WOLKVOX_OPERATION=nombre_operacion
 
 # Grafana
 GRAFANA_URL=https://tu-grafana.com
-GRAFANA_DASHBOARD_UID=abc123xyz
+GRAFANA_DASHBOARD_UID=            # vacío = se crea solo, ver abajo
 GRAFANA_DS_UID=........y5fkd
 GRAFANA_TOKEN=glsa_...          # opción A (recomendado)
 # GRAFANA_USER=user              # opción B
 # GRAFANA_PASS=pass
 ```
 
-#### Cómo obtener `GRAFANA_DASHBOARD_UID`
+#### `GRAFANA_DASHBOARD_UID` — cliente nuevo vs. tablero existente
 
-De la URL del dashboard en Grafana:
+**Cliente nuevo (recomendado):** deja `GRAFANA_DASHBOARD_UID` vacío (o `CHANGE_ME`). La primera vez que corre `bulk_grafana_agent_panels.py` (directo, vía `sync_agents.sh`, o desde `install_zabbix.sh`), el script:
+1. Crea la carpeta `wvx - {WOLKVOX_OPERATION}` en Grafana (si no existe)
+2. Crea el tablero `wvx - {WOLKVOX_OPERATION} - Latencia Agentes` dentro de esa carpeta — mismo formato que `wvx - npls - Latencia Agentes`
+3. Guarda el UID resultante de vuelta en el `.env` (línea `GRAFANA_DASHBOARD_UID=...`), para que las corridas siguientes (cron nocturno de `sync_agents.sh`) reutilicen ese mismo tablero en vez de crear uno nuevo cada noche
+
+Si querés un título distinto al derivado automáticamente, definí `GRAFANA_FOLDER_TITLE` y/o `GRAFANA_DASHBOARD_TITLE` en el `.env` antes de la primera corrida.
+
+**Tablero ya armado a mano:** si ya creaste el dashboard vos mismo en Grafana, pegá su UID de la URL:
 ```
 https://grafana.com/d/abc123xyz/mi-dashboard
                      ^^^^^^^^^ ESE es el UID
 ```
-No confundir con la URL de la **carpeta** (`/dashboards/f/...`) — el UID del dashboard sale en la URL cuando entras al dashboard en sí (`/d/...`), no en la vista de carpeta.
+No confundir con la URL de la **carpeta** (`/dashboards/f/...`) — el UID del dashboard sale en la URL cuando entras al dashboard en sí (`/d/...`), no en la vista de carpeta. Con el UID ya configurado, el script nunca intenta crear uno nuevo — solo agrega/actualiza sus paneles ahí.
 
 #### Cómo obtener `GRAFANA_DS_UID`
 
@@ -274,6 +282,8 @@ python3 bulk_grafana_agent_panels.py --dry-run
 # Si todo se ve bien, ejecuta de verdad
 python3 bulk_grafana_agent_panels.py
 ```
+
+Si `GRAFANA_DASHBOARD_UID` estaba vacío, este paso también crea la carpeta y el tablero en Grafana (ver sección de Configuración arriba) y guarda el UID en el `.env` antes de agregar los paneles.
 
 Refresca el dashboard en Grafana — verás todos los paneles de agentes creados.
 

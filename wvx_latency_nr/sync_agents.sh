@@ -35,13 +35,19 @@ mkdir -p "$LOG_DIR"
   echo ">>> Exit code NR: $RC2"
 
   echo ""
+  echo ">>> Sincronizando items de STATUS/CONNECTION..."
+  /usr/bin/python3 "${SCRIPTS_DIR}/create_status_items.py"
+  RC4=$?
+  echo ">>> Exit code status: $RC4"
+
+  echo ""
   echo ">>> Regenerando paneles de Grafana..."
   /usr/bin/python3 "${SCRIPTS_DIR}/bulk_grafana_agent_panels.py"
   RC3=$?
   echo ">>> Exit code Grafana: $RC3"
 
   echo ""
-  echo "[$(date '+%Y-%m-%d %H:%M:%S')] FIN SYNC AGENTES (latency=$RC1 nr=$RC2 grafana=$RC3)"
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] FIN SYNC AGENTES (latency=$RC1 nr=$RC2 status=$RC4 grafana=$RC3)"
 } >> "$LOG_FILE" 2>&1
 
 # Rotación simple: si log > 5MB, lo trunca dejando últimas 1000 líneas

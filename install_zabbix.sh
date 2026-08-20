@@ -283,18 +283,12 @@ else
     else
         cat >> /etc/crontab <<CRONEOF
 
-#--- ${_CRON_MARKER} ----------------------------------------
-# Ventana operativa 07:00-21:00 (hora local del servidor).
-# send_latency : cada 10 min | send_nr : cada 11 min | send_status : cada 12 min
-#   Desfases distintos evitan que los pollers colisionen en la API.
-# sync_agents (01:00 AM) : registra agentes nuevos en Zabbix
-#   y regenera los paneles de Grafana automaticamente.
-#------------------------------------------------------------
+#--- ${_CRON_MARKER}
 */10 7-21 * * * root /bin/bash ${_WVX_SCRIPTS}/send_latency_data.sh >/dev/null 2>&1
 */11 7-21 * * * root /bin/bash ${_WVX_SCRIPTS}/send_nr_data.sh >/dev/null 2>&1
 */12 7-21 * * * root /bin/bash ${_WVX_SCRIPTS}/send_status_data.sh >/dev/null 2>&1
 0 1 * * * root /bin/bash ${_WVX_SCRIPTS}/sync_agents.sh >/dev/null 2>&1
-#--- END ${_CRON_MARKER} ------------------------------------
+#--- END ${_CRON_MARKER}
 CRONEOF
         if [[ $? -eq 0 ]]; then
             echo -e "[${G}OK${N}]"

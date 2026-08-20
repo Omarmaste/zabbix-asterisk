@@ -175,6 +175,8 @@ Si tu host se llama diferente, ajusta la variable `LATENCY_ZBX_HOST` (o `ZBX_HOS
 
 ## Configuración
 
+> ⚡ **Forma recomendada — asistente interactivo:** corré `bash install_zabbix.sh` sin argumentos. Si no existe `.env`, un asistente va preguntando en español simple (qué módulos activar, credenciales de Zabbix, de Wolkvox, de Grafana...) y genera el `.env` solo — no hace falta editar nada a mano ni saber qué variable es cada cosa. Para volver a correrlo aunque ya exista `.env`: `bash install_zabbix.sh --wizard`. El resto de esta sección documenta el `.env` resultante, para referencia o edición manual.
+
 Toda la configuración real del cliente va en un archivo **`.env`** en la raíz del proyecto (`/etc/zabbix/scripts/wvx_latency_agent/.env`), **no** se edita directamente dentro de cada script:
 
 ```bash

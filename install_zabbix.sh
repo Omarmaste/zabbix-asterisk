@@ -17,16 +17,25 @@
 #   # Solo wvx_latency_nr:
 #   bash install_zabbix.sh --skip-ast_fail2ban --skip-ast_sip --skip-ast_pjsip \
 #                          --skip-ast_countcalls_latency
+#
+# Primera vez / sin .env: se lanza un asistente interactivo que pregunta
+# todo (módulos a activar + credenciales) y genera el .env solo. También
+# se puede forzar con --wizard aunque ya exista .env, para rehacerlo.
 # =============================================================
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# ─── Colores (definidos antes que nada: los usa tambien el wizard) ──
+R='\033[0;31m'; G='\033[0;32m'; Y='\033[1;33m'
+B='\033[1;34m'; W='\033[1m'; N='\033[0m'
 
 SKIP_AST_FAIL2BAN=0
 SKIP_AST_SIP=0
 SKIP_AST_PJSIP=0
 SKIP_AST_COUNTCALLS_LATENCY=0
 SKIP_WVX_LATENCY_NR=0
+RUN_WIZARD=0
 
 for arg in "$@"; do
     case "$arg" in
@@ -35,10 +44,11 @@ for arg in "$@"; do
         --skip-ast_pjsip)              SKIP_AST_PJSIP=1 ;;
         --skip-ast_countcalls_latency) SKIP_AST_COUNTCALLS_LATENCY=1 ;;
         --skip-wvx_latency_nr)         SKIP_WVX_LATENCY_NR=1 ;;
+        --wizard|--configure)          RUN_WIZARD=1 ;;
         *)
             echo "Argumento desconocido: $arg"
             echo ""
-            echo "Uso: bash install_zabbix.sh [--skip-<modulo>]"
+            echo "Uso: bash install_zabbix.sh [--skip-<modulo>] [--wizard]"
             echo "  Módulos: ast_fail2ban  ast_sip  ast_pjsip"
             echo "           ast_countcalls_latency  wvx_latency_nr"
             exit 1
@@ -46,17 +56,20 @@ for arg in "$@"; do
     esac
 done
 
-# ─── Cargar .env ──────────────────────────────────────────────
+# ─── .env: asistente interactivo si no existe (o si se pide --wizard) ──
+if [[ ! -f "${SCRIPT_DIR}/.env" ]] || [[ $RUN_WIZARD -eq 1 ]]; then
+    source "${SCRIPT_DIR}/install/setup_wizard.sh"
+    run_wizard
+    # El wizard deja SKIP_* seteados según lo que el usuario respondió
+    # ahí adentro — pisa cualquier --skip-* que se haya pasado por CLI.
+fi
+
 if [[ ! -f "${SCRIPT_DIR}/.env" ]]; then
     echo "ERROR: No existe ${SCRIPT_DIR}/.env"
     echo "Configura las credenciales antes de instalar."
     exit 1
 fi
 set -a; source "${SCRIPT_DIR}/.env"; set +a
-
-# ─── Colores ──────────────────────────────────────────────────
-R='\033[0;31m'; G='\033[0;32m'; Y='\033[1;33m'
-B='\033[1;34m'; W='\033[1m'; N='\033[0m'
 
 # ─── Contadores ───────────────────────────────────────────────
 PASS=0; FAIL_COUNT=0; SKIP_COUNT=0

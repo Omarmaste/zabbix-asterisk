@@ -24,6 +24,11 @@ WOLKVOX_URL       = os.environ.get("WOLKVOX_URL",       "https://wv0036.wolkvox.
 WOLKVOX_SERVER    = os.environ.get("WOLKVOX_SERVER",    "00XX")
 WOLKVOX_TOKEN     = os.environ.get("WOLKVOX_TOKEN",     "CHANGE_ME")
 WOLKVOX_OPERATION = os.environ.get("WOLKVOX_OPERATION", "unknown_operation")
+# Tag para el "name" visible del item en Zabbix/Grafana: sin el prefijo de
+# marca compartida "ALOGLOBAL-" (todas las operaciones lo llevan en
+# WOLKVOX_OPERATION) para ganar ancho en las leyendas de los paneles globales.
+_op_upper = WOLKVOX_OPERATION.upper()
+DISPLAY_TAG = _op_upper[len("ALOGLOBAL-"):] if _op_upper.startswith("ALOGLOBAL-") else _op_upper
 
 DELAY_BETWEEN_REQUESTS = 0.3
 MAX_RETRIES = 2
@@ -86,7 +91,7 @@ def main():
     new_agents = []
     for idx, (code, name) in enumerate(sorted(agents.items()), 1):
         key_ = f"{WOLKVOX_OPERATION}.agent.latency[{code}]"
-        item_name = f"[{WOLKVOX_OPERATION.upper()}] Agent {code} - {name} - Latency"
+        item_name = f"[{DISPLAY_TAG}] Agent {code} - {name} - Latency"
         it = item_by_key(auth, hostid, key_)
         try:
             if it:

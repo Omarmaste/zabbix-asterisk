@@ -82,11 +82,22 @@ GRAFANA_GROUP_FILTER = os.environ.get("GRAFANA_GROUP_FILTER", "Zabbix servers")
 # El host "Zabbix server" es compartido por TODOS los clientes de este
 # servidor (cada operacion Wolkvox distingue sus items solo por prefijo de
 # key/nombre) — por eso los paneles globales anclan el filtro de nombre al
-# prefijo "[OPERACION]" que create_latency_items.py/create_nr_items.py ya
-# ponen en el "name" del item, para no mezclar agentes de otro cliente.
-_OP_TAG = re.escape(WOLKVOX_OPERATION.upper())
+# prefijo "[TAG]" que create_latency_items.py/create_nr_items.py ya ponen
+# en el "name" del item, para no mezclar agentes de otro cliente.
+# DISPLAY_TAG = WOLKVOX_OPERATION sin el prefijo de marca compartida
+# "ALOGLOBAL-" (todas las operaciones lo llevan) — debe calcularse IGUAL
+# que en create_latency_items.py/create_nr_items.py/create_status_items.py,
+# si no el filtro deja de matchear los items reales.
+_op_upper = WOLKVOX_OPERATION.upper()
+DISPLAY_TAG = _op_upper[len("ALOGLOBAL-"):] if _op_upper.startswith("ALOGLOBAL-") else _op_upper
+_OP_TAG = re.escape(DISPLAY_TAG)
 LATENCY_NAME_FILTER = rf"/^\[{_OP_TAG}\] Agent .* - .* - Latency$/"
 NR_NAME_FILTER       = rf"/^\[{_OP_TAG}\] Agent .* - .* - NR$/"
+
+# Timezone del tablero (paneles + navegacion "Today"): se toma de .env,
+# reutilizando TIMEZONE_DEFAULT (mismo que usa wvx_auditlog) salvo que se
+# quiera un GRAFANA_TIMEZONE especifico solo para el tablero.
+GRAFANA_TIMEZONE = os.environ.get("GRAFANA_TIMEZONE", os.environ.get("TIMEZONE_DEFAULT", "America/Bogota"))
 
 
 # Layout (columna por agente: NR, Latencia, Estado, Plataforma, Conexion, Version)
@@ -243,7 +254,7 @@ def grafana_create_dashboard(title, folder_uid):
         "uid": None,
         "title": title,
         "tags": [],
-        "timezone": "America/Bogota",
+        "timezone": GRAFANA_TIMEZONE,
         "schemaVersion": 42,
         "version": 0,
         "refresh": "",
@@ -636,6 +647,10 @@ def main():
             if not any(m in (p.get("description") or "") for m in ALL_AUTO_MARKERS)]
     removed = len(existing) - len(kept)
     print(f"      Existentes: {len(existing)} | Conservados: {len(kept)} | Removidos auto: {removed}")
+
+    if dashboard.get("timezone") != GRAFANA_TIMEZONE:
+        print(f"      Timezone: {dashboard.get('timezone') or '(vacio)'} -> {GRAFANA_TIMEZONE}")
+        dashboard["timezone"] = GRAFANA_TIMEZONE
 
     dashboard["panels"] = kept + new_panels
     print(f"[6/6] Guardando ({len(dashboard['panels'])} paneles totales)...")

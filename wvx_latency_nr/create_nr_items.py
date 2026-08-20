@@ -10,7 +10,12 @@ if _ef:
         _l = _l.strip()
         if _l and not _l.startswith('#') and '=' in _l:
             _k, _, _v = _l.partition('=')
-            _k, _v = _k.strip(), _v.strip().strip('"').strip("'")
+            _k, _v = _k.strip(), _v.strip()
+            if _v[:1] in ('"', "'"):
+                _q = _v[0]; _e = _v.find(_q, 1)
+                _v = _v[1:_e] if _e != -1 else _v[1:]
+            else:
+                _v = _v.split('#', 1)[0].strip()
             if _k and _k not in _os.environ:
                 _os.environ[_k] = _v
 del _pl, _os, _ef

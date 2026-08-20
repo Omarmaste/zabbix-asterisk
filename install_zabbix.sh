@@ -153,7 +153,10 @@ else
     # Detecta estado Fail2ban c/5 min, las 24 h.
     # Elimina ruta vieja (/etc/zabbix/scripts/asterisk.fail2ban)
     # si aún existe, para que no queden dos entradas activas.
-    _CRON_MARKER="AUTO:ast_fail2ban"
+    # El marcador incluye SCRIPT_DIR: si no fuera unico por instalacion, un
+    # segundo cliente en este mismo servidor vería el marcador del primero
+    # ya presente en /etc/crontab y se saltaria su propio cron por completo.
+    _CRON_MARKER="AUTO:ast_fail2ban:${SCRIPT_DIR}"
     _F2B_SCRIPT="${SCRIPT_DIR}/ast_fail2ban/asterisk.fail2ban"
     printf "  %-54s" "Cron fail2ban en /etc/crontab"
     # Limpia entrada vieja con ruta anterior (si existiera)
@@ -268,7 +271,10 @@ else
     # sync_agents 01:00 AM — registra agentes nuevos (latencia/NR/estado)
     #   en Zabbix y regenera todos los paneles de Grafana automáticamente,
     #   incluyendo el umbral de "version desactualizada" (30 dias).
-    _CRON_MARKER="AUTO:wvx_latency_nr"
+    # El marcador incluye SCRIPT_DIR (ver nota igual en el modulo AST FAIL2BAN):
+    # unico por instalacion para que un segundo cliente en este servidor no
+    # se salte su propio cron creyendo que "ya esta configurado".
+    _CRON_MARKER="AUTO:wvx_latency_nr:${SCRIPT_DIR}"
     _WVX_SCRIPTS="${SCRIPT_DIR}/wvx_latency_nr"
     printf "  %-54s" "Cron entries en /etc/crontab"
     if grep -q "${_CRON_MARKER}" /etc/crontab 2>/dev/null; then

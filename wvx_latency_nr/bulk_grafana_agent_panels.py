@@ -79,6 +79,15 @@ GRAFANA_PASS   = os.environ.get("GRAFANA_PASS",  "CHANGE_ME")
 GRAFANA_HOST_FILTER  = os.environ.get("GRAFANA_HOST_FILTER",  "Zabbix server")
 GRAFANA_GROUP_FILTER = os.environ.get("GRAFANA_GROUP_FILTER", "Zabbix servers")
 
+# El host "Zabbix server" es compartido por TODOS los clientes de este
+# servidor (cada operacion Wolkvox distingue sus items solo por prefijo de
+# key/nombre) — por eso los paneles globales anclan el filtro de nombre al
+# prefijo "[OPERACION]" que create_latency_items.py/create_nr_items.py ya
+# ponen en el "name" del item, para no mezclar agentes de otro cliente.
+_OP_TAG = re.escape(WOLKVOX_OPERATION.upper())
+LATENCY_NAME_FILTER = rf"/^\[{_OP_TAG}\] Agent .* - .* - Latency$/"
+NR_NAME_FILTER       = rf"/^\[{_OP_TAG}\] Agent .* - .* - NR$/"
+
 
 # Layout (columna por agente: NR, Latencia, Estado, Plataforma, Conexion, Version)
 PANELS_PER_ROW = 6   # 24 / PANEL_W
@@ -354,7 +363,7 @@ def make_latency_global_panel(panel_id):
         "description": desc,
         "datasource": {"type": "alexanderzobnin-zabbix-datasource", "uid": GRAFANA_DS_UID},
         "gridPos": {"x": 0, "y": 0, "w": 24, "h": GLOBAL_H},
-        "targets": [make_global_target("A", "/Agent .* - .* - Latency/")],
+        "targets": [make_global_target("A", LATENCY_NAME_FILTER)],
         "options": {
             "tooltip": {"mode": "single", "sort": "none", "hideZeros": False},
             "legend": {
@@ -406,7 +415,7 @@ def make_nr_global_panel(panel_id):
         "description": GLOBAL_MARKER,
         "datasource": {"type": "alexanderzobnin-zabbix-datasource", "uid": GRAFANA_DS_UID},
         "gridPos": {"x": 0, "y": GLOBAL_H, "w": 24, "h": GLOBAL_H},
-        "targets": [make_global_target("A", "/Agent .* - .* - NR/")],
+        "targets": [make_global_target("A", NR_NAME_FILTER)],
         "options": {
             "tooltip": {"mode": "single", "sort": "none", "hideZeros": False},
             "legend": {

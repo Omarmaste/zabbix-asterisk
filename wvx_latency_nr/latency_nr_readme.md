@@ -148,7 +148,7 @@ sudo git clone https://github.com/TU_USUARIO/TU_REPO.git wvx_latency_agent
 cd wvx_latency_agent
 ```
 
-> El repo clona **todo el proyecto** (incluye `ast_pjsip`, `ast_sip`, `ast_fail2ban`, `wvx_auditlog`, etc.). Los archivos de este módulo específico (latencia + NR de agentes) están dentro de la subcarpeta `wvx_latency_nr/`.
+> El repo clona **todo el proyecto** (incluye `ast_pjsip`, `ast_sip`, `ast_fail2ban`, etc.). Los archivos de este módulo específico (latencia + NR de agentes) están dentro de la subcarpeta `wvx_latency_nr/`.
 
 ### 2. Permisos
 
@@ -319,7 +319,7 @@ Sincronización diaria de agentes nuevos (items Zabbix + paneles Grafana):
 0 1 * * * /bin/bash /etc/zabbix/scripts/wvx_latency_agent/wvx_latency_nr/sync_agents.sh
 ```
 
-> ⚠️ **Ruta correcta — importante:** los **seis** scripts de este módulo (`send_latency_data.sh`, `send_nr_data.sh`, `create_latency_items.py`, `create_nr_items.py`, `bulk_grafana_agent_panels.py` y `sync_agents.sh`) viven **dentro de la subcarpeta `wvx_latency_nr/`**, no en la raíz del clone (`wvx_latency_agent/`). El `git clone` trae el repo completo con otros módulos (`ast_pjsip`, `ast_sip`, `ast_fail2ban`, `wvx_auditlog`, etc.) en la raíz — es fácil, al armar el cron, olvidar el segundo tramo de la ruta y apuntar a `wvx_latency_agent/sync_agents.sh` en vez de `wvx_latency_agent/wvx_latency_nr/sync_agents.sh`. Esa tarea fallaría silenciosamente (cron no avisa si el archivo no existe, solo no hace nada). Siempre verifica con `ls -l` la ruta exacta antes de darla por buena en el crontab.
+> ⚠️ **Ruta correcta — importante:** los scripts de este módulo (`send_latency_data.sh`, `send_nr_data.sh`, `send_status_data.sh`, `create_latency_items.py`, `create_nr_items.py`, `create_status_items.py`, `bulk_grafana_agent_panels.py` y `sync_agents.sh`) viven **dentro de la subcarpeta `wvx_latency_nr/`**, no en la raíz del clone (`wvx_latency_agent/`). El `git clone` trae el repo completo con otros módulos (`ast_pjsip`, `ast_sip`, `ast_fail2ban`, etc.) en la raíz — es fácil, al armar el cron, olvidar el segundo tramo de la ruta y apuntar a `wvx_latency_agent/sync_agents.sh` en vez de `wvx_latency_agent/wvx_latency_nr/sync_agents.sh`. Esa tarea fallaría silenciosamente (cron no avisa si el archivo no existe, solo no hace nada). Siempre verifica con `ls -l` la ruta exacta antes de darla por buena en el crontab.
 >
 > El único archivo que **sí** vive en la raíz del clone (un nivel arriba de `wvx_latency_nr/`) es el **`.env`**, ya que los scripts están programados para buscarlo subiendo un nivel desde su propia ubicación.
 

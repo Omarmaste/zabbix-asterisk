@@ -4,7 +4,7 @@
 #
 # Módulos (= directorios del proyecto):
 #   ast_fail2ban | ast_sip | ast_pjsip | ast_countcalls_latency
-#   wvx_latency_nr | wvx_auditlog
+#   wvx_latency_nr
 #
 # Uso:
 #   bash install_zabbix.sh                          # instala todo
@@ -13,12 +13,8 @@
 # Nota: si ast_sip, ast_pjsip o ast_countcalls_latency están activos,
 #       sus scripts de agente se escriben en zabbix_agentd.conf automáticamente.
 #
-# Ejemplos:
+# Ejemplo:
 #   # Solo wvx_latency_nr:
-#   bash install_zabbix.sh --skip-ast_fail2ban --skip-ast_sip --skip-ast_pjsip \
-#                          --skip-ast_countcalls_latency --skip-wvx_auditlog
-#
-#   # Solo módulos Wolkvox:
 #   bash install_zabbix.sh --skip-ast_fail2ban --skip-ast_sip --skip-ast_pjsip \
 #                          --skip-ast_countcalls_latency
 # =============================================================
@@ -31,7 +27,6 @@ SKIP_AST_SIP=0
 SKIP_AST_PJSIP=0
 SKIP_AST_COUNTCALLS_LATENCY=0
 SKIP_WVX_LATENCY_NR=0
-SKIP_WVX_AUDITLOG=0
 
 for arg in "$@"; do
     case "$arg" in
@@ -40,13 +35,12 @@ for arg in "$@"; do
         --skip-ast_pjsip)              SKIP_AST_PJSIP=1 ;;
         --skip-ast_countcalls_latency) SKIP_AST_COUNTCALLS_LATENCY=1 ;;
         --skip-wvx_latency_nr)         SKIP_WVX_LATENCY_NR=1 ;;
-        --skip-wvx_auditlog)           SKIP_WVX_AUDITLOG=1 ;;
         *)
             echo "Argumento desconocido: $arg"
             echo ""
             echo "Uso: bash install_zabbix.sh [--skip-<modulo>]"
             echo "  Módulos: ast_fail2ban  ast_sip  ast_pjsip"
-            echo "           ast_countcalls_latency  wvx_latency_nr  wvx_auditlog"
+            echo "           ast_countcalls_latency  wvx_latency_nr"
             exit 1
             ;;
     esac
@@ -125,9 +119,8 @@ declare -A _MODS=(
     [ast_pjsip]=$SKIP_AST_PJSIP
     [ast_countcalls_latency]=$SKIP_AST_COUNTCALLS_LATENCY
     [wvx_latency_nr]=$SKIP_WVX_LATENCY_NR
-    [wvx_auditlog]=$SKIP_WVX_AUDITLOG
 )
-for mod in ast_fail2ban ast_sip ast_pjsip ast_countcalls_latency wvx_latency_nr wvx_auditlog; do
+for mod in ast_fail2ban ast_sip ast_pjsip ast_countcalls_latency wvx_latency_nr; do
     if [[ ${_MODS[$mod]} -eq 1 ]]; then
         printf "  ${Y}%-28s${N} SKIP\n" "$mod"
     else
@@ -300,26 +293,6 @@ CRONEOF
             FAIL_MSGS+=("Cron entries en /etc/crontab")
         fi
     fi
-fi
-
-# ═══════════════════════════════════════════════════════════════
-# MÓDULO 6 — WVX AUDIT LOG
-# ═══════════════════════════════════════════════════════════════
-module_header "WVX AUDIT LOG  [host: ${ZBX_HOST_AUDITLOG:-${ZBX_HOST:-monitoralo}}]"
-
-if [[ $SKIP_WVX_AUDITLOG -eq 1 ]]; then
-    skip_step "wvx_auditlog (--skip-wvx_auditlog)"
-elif [[ -z "${WVX_OPERATIONS:-}" ]]; then
-    skip_step "WVX_OPERATIONS vacío en .env — omitido"
-else
-    for op in $WVX_OPERATIONS; do
-        run "Items auditlog [$op]" \
-            env ZBX_HOST="${ZBX_HOST_AUDITLOG:-${ZBX_HOST:-monitoralo}}" \
-            python3 "${SCRIPT_DIR}/wvx_auditlog/create_items_auditlog.py" "$op"
-        run "Triggers auditlog [$op]" \
-            env ZBX_HOST="${ZBX_HOST_AUDITLOG:-${ZBX_HOST:-monitoralo}}" \
-            python3 "${SCRIPT_DIR}/wvx_auditlog/create_trigger.py" "$op"
-    done
 fi
 
 # ═══════════════════════════════════════════════════════════════

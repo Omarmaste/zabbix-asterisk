@@ -99,9 +99,9 @@ _OP_TAG = re.escape(DISPLAY_TAG)
 LATENCY_NAME_FILTER = rf"/^\[{_OP_TAG}\] Agent .* - .* - Latency$/"
 NR_NAME_FILTER       = rf"/^\[{_OP_TAG}\] Agent .* - .* - NR$/"
 
-# Timezone del tablero (paneles + navegacion "Today"): se toma de .env,
-# reutilizando TIMEZONE_DEFAULT (mismo que usa wvx_auditlog) salvo que se
-# quiera un GRAFANA_TIMEZONE especifico solo para el tablero.
+# Timezone del tablero (paneles + navegacion "Today"): se toma de .env
+# (TIMEZONE_DEFAULT), salvo que se quiera un GRAFANA_TIMEZONE especifico
+# solo para el tablero.
 GRAFANA_TIMEZONE = os.environ.get("GRAFANA_TIMEZONE", os.environ.get("TIMEZONE_DEFAULT", "America/Bogota"))
 
 
